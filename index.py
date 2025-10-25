@@ -84,7 +84,8 @@ rag_chain = (
 )
 
 # --- 6. Ask Questions ---
-print("Type exit to leave")
+
+print("\nType exit to leave")
 question = ""
 while True:
     question = input("Question: ")
