@@ -36,7 +36,7 @@ def update_processed_files(filename):
 # --- 3. Main Ingestion Logic ---
 
 def main():
-    print("🚀 Starting ingestion process...")
+    print("Starting ingestion process...")
 
     # Ensure the source directory exists
     if not os.path.isdir(SOURCE_DIRECTORY):
@@ -56,10 +56,10 @@ def main():
     new_files = [f for f in all_files if f not in processed_files]
 
     if not new_files:
-        print("✅ No new documents to ingest. Database is up to date.")
+        print("No new documents to ingest. Database is up to date.")
         return
 
-    print(f"📥 Found {len(new_files)} new document(s) to add: {', '.join(new_files)}")
+    print(f"Found {len(new_files)} new document(s) to add: {', '.join(new_files)}")
 
     # Initialize the embedding model
     embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
@@ -91,7 +91,7 @@ def main():
             update_processed_files(filename)
             print(f"Successfully added '{filename}' to the vector store.")
         except Exception as e:
-            print(f"❌ Failed to process '{filename}'. Error: {e}")
+            print(f"Failed to process '{filename}'. Error: {e}")
 
     print("\nIngestion complete!")
 
