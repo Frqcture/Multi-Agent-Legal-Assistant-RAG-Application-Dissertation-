@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 
 # Import LangChain components
+from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate
@@ -83,15 +84,13 @@ rag_chain = (
 )
 
 # --- 6. Ask Questions ---
-print("Ready to answer questions.")
-question = "What is the main topic of the document?" # Example question
-print(f"Question: {question}")
+print("Type exit to leave")
+question = ""
+while True:
+    question = input("Question: ")
+    if question == "exit":
+        break
+    answer = rag_chain.invoke(question)
+    print(f"Answer: {answer}")
 
-answer = rag_chain.invoke(question)
-print(f"Answer: {answer}")
-
-question = "When was the most recent update to this document?"
-print(f"Question: {question}")
-
-answer = rag_chain.invoke(question)
-print(f"Answer: {answer}")
+print("Thank you!")
