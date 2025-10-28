@@ -67,6 +67,11 @@ retriever = vectorstore.as_retriever()
 template = """
 You are a helpful assistant. Answer the question based only on the following context.
 If you don't know the answer, just say that you don't know.
+If you use any information from the context, reference the document name, and the page that it was taken from, use this format:
+[document_name, page_number]
+
+You may use other contex if there is no information about a topic given, however the user must tell you that you can and
+you must clearly tell them that the given information is not from the documents.
 
 Context:
 {context}
