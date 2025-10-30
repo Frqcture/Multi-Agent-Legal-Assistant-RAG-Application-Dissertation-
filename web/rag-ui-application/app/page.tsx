@@ -8,9 +8,11 @@ export default function Home() {
 
 function testRichText() {
   return (
-    <div>
-      <p>This is a place to input text</p>
-      <input type="text"/>
+    <div id="outerMainTextInput">
+      <div id="innerMainTextInput">
+        <p>This is a place to input text</p>
+        <input id="promptTextBox" type="" name="prompt" value="Ask me a question..."/>
+      </div>
     </div>
   )
 }
