@@ -4,7 +4,7 @@ from pydantic import BaseModel
 # This assumes your RAG class is in a file named rag_engine.py
 from index import RAGEngine
 
-app = FastAPI(title="My RAG API")
+app = FastAPI(title="BackendAPI")
 
 # 1. Start the engine
 rag_app = RAGEngine()
