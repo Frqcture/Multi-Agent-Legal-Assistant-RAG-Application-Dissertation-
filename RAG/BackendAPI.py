@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from your_script_filename import RAGEngine # Import the class
+from index import RAGEngine # Import the class
 
 app = FastAPI()
 
