@@ -26,28 +26,6 @@
     margin-bottom: 32px;
 }
 
-.greetingRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 1.25rem;
-    color: #e3e3e3; /* Slightly off-white */
-    font-weight: 400;
-    margin-bottom: 4px;
-}
-
-/* The gradient sparkle icon */
-.sparkleIcon {
-    width: 24px;
-    height: 24px;
-    /* Simple CSS gradient trick for the icon color */
-    background: linear-gradient(135deg, #4285f4, #9b72cb, #d96570);
-    -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="M440-160v-226L214-612l113-114 227 226h226v160H554L327-114l-113-113 226-227v294h160Z"/></svg>') no-repeat center;
-    mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 0l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"/></svg>') no-repeat center;
-    -webkit-mask-size: contain;
-    mask-size: contain;
-}
-
 .mainTitle {
     font-size: 3rem; /* Large title size */
     font-weight: 400; /* Relatively thin weight */
@@ -104,38 +82,8 @@
 }
 
 /* Groups of icons on left and right */
-.leftActions, .rightActions {
+.rightActions {
     display: flex;
     align-items: center;
     gap: 4px;
-}
-
-/* The "Tools" and "Thinking" buttons with text */
-.textIconButton {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #a8a8a8;
-    font-size: 0.95rem;
-    padding: 8px 12px;
-    border-radius: 24px;
-    cursor: pointer;
-     transition: color 0.2s, background-color 0.2s;
-}
-
-.textIconButton:hover {
-     color: #ffffff;
-     background-color: rgba(255,255,255, 0.1);
-}
-
-/* Utility class for SVGs */
-.svgIcon {
-    width: 24px;
-    height: 24px;
-    fill: currentColor;
-}
-.svgIconSmall {
-    width: 20px;
-    height: 20px;
-    fill: currentColor;
 }
