@@ -4,36 +4,36 @@ import { BiArrowToRight } from "react-icons/bi";
 
 
 const Search: React.FC = () => {
-  return (
-    <div className={styles.pageContainer}>
-      <div className={styles.contentWrapper}>
-        
-        {/* Title Section */}
-        <div className={styles.headerSection}>
-          <h1 className={styles.mainTitle}>Ask me a question!</h1>
-        </div>
+    return (
+        <div className={styles.pageContainer}>
+            <div className={styles.contentWrapper}>
 
-        {/* The Input Box Section */}
-        <div className={styles.searchContainer}>
+                {/* Title Section */}
+                <div className={styles.headerSection}>
+                    <h1 className={styles.mainTitle}>Ask me a question!</h1>
+                </div>
 
-          {/* The Text Input */}
-          <input 
-            type="text" 
-            className={styles.searchInput} 
-            placeholder="Ask Gemini 3" 
-          />
+                {/* The Input Box Section */}
+                <div className={styles.searchContainer}>
+                    
+                    {/* The Text Input */}
+                    <input
+                        type="text"
+                        className={styles.searchInput}
+                        placeholder="Ask your question here..."
+                    />
 
-           {/* Right Actions */}
-          <div className={styles.rightActions}>
-            <div className={styles.iconButton} role="button" aria-label="Submit Question">
-               <BiArrowToRight />
+                    {/* Right Actions */}
+                    <div className={styles.rightActions}>
+                        <div className={styles.iconButton} role="button" aria-label="Submit Question">
+                            <BiArrowToRight />
+                        </div>
+                    </div>
+                </div>
+
             </div>
-          </div>
         </div>
-
-      </div>
-    </div>
-  );
+    );
 };
 
 export default Search;
