@@ -1,0 +1,141 @@
+/* GeminiSearch.module.css */
+
+/* The main full-screen container */
+.pageContainer {
+    background-color: #000000; /* Pure black background */
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    /* Align slightly above absolute center for visual balance */
+    padding-top: 25vh; 
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.contentWrapper {
+    width: 100%;
+    max-width: 768px; /* Standard tablet/small laptop width */
+    padding: 0 24px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Title Section */
+.headerSection {
+    margin-bottom: 32px;
+}
+
+.greetingRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.25rem;
+    color: #e3e3e3; /* Slightly off-white */
+    font-weight: 400;
+    margin-bottom: 4px;
+}
+
+/* The gradient sparkle icon */
+.sparkleIcon {
+    width: 24px;
+    height: 24px;
+    /* Simple CSS gradient trick for the icon color */
+    background: linear-gradient(135deg, #4285f4, #9b72cb, #d96570);
+    -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24"><path d="M440-160v-226L214-612l113-114 227 226h226v160H554L327-114l-113-113 226-227v294h160Z"/></svg>') no-repeat center;
+    mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" height="24" viewBox="0 0 24 24" width="24"><path d="M0 0h24v24H0z" fill="none"/><path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 0l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"/></svg>') no-repeat center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+.mainTitle {
+    font-size: 3rem; /* Large title size */
+    font-weight: 400; /* Relatively thin weight */
+    margin: 0;
+    line-height: 1.2;
+}
+
+
+/* Search Box Section */
+.searchContainer {
+    background-color: #1e1e1e; /* Dark charcoal gray */
+    border-radius: 36px; /* Highly rounded corners */
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    min-height: 64px;
+    border: 1px solid transparent; /* Placeholder for potential focus state */
+    transition: background-color 0.2s;
+}
+
+.searchContainer:hover {
+     background-color: #2a2a2a; /* Slightly lighter on hover */
+}
+
+/* The actual input field */
+.searchInput {
+    flex-grow: 1; /* Takes up remaining space */
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 1.1rem;
+    margin: 0 16px;
+    outline: none; /* Removes default browser focus outline */
+}
+.searchInput::placeholder {
+    color: #8e8e8e;
+}
+
+/* Action Buttons (Icons) */
+.iconButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a8a8a8; /* Muted icon color */
+    padding: 8px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.iconButton:hover {
+    color: #ffffff;
+    background-color: rgba(255,255,255, 0.1);
+}
+
+/* Groups of icons on left and right */
+.leftActions, .rightActions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* The "Tools" and "Thinking" buttons with text */
+.textIconButton {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #a8a8a8;
+    font-size: 0.95rem;
+    padding: 8px 12px;
+    border-radius: 24px;
+    cursor: pointer;
+     transition: color 0.2s, background-color 0.2s;
+}
+
+.textIconButton:hover {
+     color: #ffffff;
+     background-color: rgba(255,255,255, 0.1);
+}
+
+/* Utility class for SVGs */
+.svgIcon {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+.svgIconSmall {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
