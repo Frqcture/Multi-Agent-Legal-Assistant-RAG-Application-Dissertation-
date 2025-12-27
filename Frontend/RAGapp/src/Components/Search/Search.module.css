@@ -85,3 +85,53 @@
     align-items: center;
     gap: 4px;
 }
+
+.messageHistory {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px 0;
+    margin-bottom: 20px;
+    /* Hide scrollbar for a cleaner look */
+    scrollbar-width: none; 
+}
+
+.messageHistory::-webkit-scrollbar {
+    display: none;
+}
+
+.messageRow {
+    display: flex;
+    width: 100%;
+}
+
+/* Align user messages to the right */
+.user {
+    justify-content: flex-end;
+}
+
+/* Align AI messages to the left */
+.bot {
+    justify-content: flex-start;
+}
+
+.messageBubble {
+    max-width: 80%;
+    padding: 12px 16px;
+    border-radius: 18px;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.user .messageBubble {
+    background-color: #2f2f2f; /* Dark gray for user */
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.bot .messageBubble {
+    background-color: transparent; /* Gemini often uses no bubble for AI */
+    color: #e3e3e3;
+    padding-left: 0;
+}
