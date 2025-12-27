@@ -79,8 +79,6 @@ const Search: React.FC = () => {
         if (botMessage) {
             setMessages(prevMessages => [...prevMessages, botMessage]); //Add bot response to end of the chat
         }
-
-  
     }
 
     const handleEnterKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
