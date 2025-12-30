@@ -45,7 +45,7 @@ class RAGEngine:
     def _setup_chain(self):
         retriever = self.vectorstore.as_retriever()
         template = """
-        You are a helpful assistant. Answer the question based only on the following context.
+        You are a helpful assistant. Answer the question based only on the following context. You should give references in the format [document_name, page_number] for every bit of information that you use.
         Context: {context}
         Question: {question}
         """

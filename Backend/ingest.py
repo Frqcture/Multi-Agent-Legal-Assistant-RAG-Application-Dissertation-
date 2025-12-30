@@ -1,5 +1,8 @@
 import os
 from dotenv import load_dotenv
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
 
 # Import LangChain components
 from langchain_openai import OpenAIEmbeddings
@@ -34,66 +37,38 @@ def update_processed_files(filename):
         f.write(filename + '\n')
 
 # --- 3. Main Ingestion Logic ---
+# ... (all your existing imports)
 
-def main():
-    print("Starting ingestion process...")
-
-    # Ensure the source directory exists
-    if not os.path.isdir(SOURCE_DIRECTORY):
-        print(f"Error: Source directory '{SOURCE_DIRECTORY}' not found.")
-        print("Please create it and add your PDF files.")
-        return
-
-    # Check if the ChromaDB already exists. If not, this script can't append.
-    if not os.path.isdir(PERSIST_DIRECTORY):
-        print(f"Error: ChromaDB directory '{PERSIST_DIRECTORY}' not found.")
-        print("Please run your main RAG application first to create the database.")
-        return
-
-    # Get the list of files to process
-    processed_files = get_processed_files()
-    all_files = [f for f in os.listdir(SOURCE_DIRECTORY) if f.endswith(".pdf")]
-    new_files = [f for f in all_files if f not in processed_files]
-
-    if not new_files:
-        print("No new documents to ingest. Database is up to date.")
-        return
-
-    print(f"Found {len(new_files)} new document(s) to add: {', '.join(new_files)}")
-
-    # Initialize the embedding model
+def run_ingestion():
+    """Programmatic entry point for the API"""
+    # Initialize components
     embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
 
-    # Load the existing vector store
+    # Ensure directories exist
+    if not os.path.exists(SOURCE_DIRECTORY):
+        os.makedirs(SOURCE_DIRECTORY)
+
+    # Initialize the vectorstore
     vectorstore = Chroma(
         persist_directory=PERSIST_DIRECTORY,
         embedding_function=embedding_model
     )
 
-    # Process and add each new document
+    processed_files = get_processed_files()
+    all_files = [f for f in os.listdir(SOURCE_DIRECTORY) if f.endswith(".pdf")]
+    new_files = [f for f in all_files if f not in processed_files]
+
+    if not new_files:
+        return "No new documents found."
+
     for filename in new_files:
-        try:
-            print(f"Processing '{filename}'...")
-            file_path = os.path.join(SOURCE_DIRECTORY, filename)
+        file_path = os.path.join(SOURCE_DIRECTORY, filename)
+        loader = PyPDFLoader(file_path)
+        docs = loader.load()
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        splits = text_splitter.split_documents(docs)
 
-            # Load the new PDF
-            loader = PyPDFLoader(file_path)
-            docs = loader.load()
+        vectorstore.add_documents(documents=splits)
+        update_processed_files(filename)
 
-            # Split the document into chunks
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-            splits = text_splitter.split_documents(docs)
-
-            # Add the new document chunks to the existing vector store
-            vectorstore.add_documents(documents=splits)
-
-            # Log the file as processed *after* successful ingestion
-            update_processed_files(filename)
-            print(f"Successfully added '{filename}' to the vector store.")
-        except Exception as e:
-            print(f"Failed to process '{filename}'. Error: {e}")
-
-    print("\nIngestion complete!")
-
-if __name__ == "__main__":
-    main()
+    return f"Successfully ingested {len(new_files)} files."

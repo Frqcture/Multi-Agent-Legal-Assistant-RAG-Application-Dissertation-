@@ -1,27 +1,29 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import styles from './Search.module.css';
-import { BiArrowToRight } from "react-icons/bi";
+import { BiArrowToRight, BiBook, BiLoaderAlt } from "react-icons/bi";
 
-//Define the structure of a message
+// Define the structure of a message
 interface Message {
     id: number;
     text: string;
     sender: 'user' | 'bot';
 }
 
-// Define the shape of your request body
 interface AskRequest {
     question: string;
 }
 
-// Define the shape of the expected response (optional but recommended)
 interface AskResponse {
-    answer: string; // Adjust based on your actual API response
+    answer: string;
 }
 
-async function askQuestion(question: string): Promise<Message | void> {
-    const url = 'http://127.0.0.1:8000/ask';
+// --- API Helpers ---
 
+const BASE_URL = 'http://192.168.1.74:8000';
+
+// Function to ask a question to the backend API
+async function askQuestion(question: string): Promise<Message | void> {
+    const url = `${BASE_URL}/ask`;
     const payload: AskRequest = { question };
 
     try {
@@ -34,34 +36,54 @@ async function askQuestion(question: string): Promise<Message | void> {
             body: JSON.stringify(payload),
         });
 
-        if (!response.ok) {
-            throw new Error(`Error! status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Error! status: ${response.status}`);
 
         const result = (await response.json()) as AskResponse;
-
-        const botMessage: Message = {
+        return {
             id: Date.now(),
             text: result.answer,
             sender: 'bot'
         };
-
-        console.log('Response:', result);
-        return botMessage;
     } catch (error) {
         console.error('Failed to fetch:', error);
     }
 }
 
-const Search: React.FC = () => {
-    const [inputValue, setInputValue] = React.useState<string>("");
-    const [messages, setMessages] = React.useState<Message[]>([]);
+// Function to handle the PDF upload
+async function uploadPDF(file: File): Promise<{ message: string; status: string } | null> {
+    const url = `${BASE_URL}/upload`;
+    const formData = new FormData();
+    formData.append('file', file);
 
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData, // No headers needed, browser sets boundary
+        });
+
+        if (!response.ok) throw new Error('Upload failed');
+        return await response.json();
+    } catch (error) {
+        console.error('Upload error:', error);
+        return null;
+    }
+}
+
+const Search: React.FC = () => {
+    const [inputValue, setInputValue] = useState<string>("");
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [isIngesting, setIsIngesting] = useState<boolean>(false);
+    
+    // Ref to trigger the hidden file input
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // --- Input Handlers ---
     const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         setInputValue(event.target.value);
     }
 
     const handleSend = async () => {
+        if (!inputValue.trim()) return;
 
         const userMessage: Message = {
             id: Date.now(),
@@ -69,38 +91,72 @@ const Search: React.FC = () => {
             sender: 'user'
         }
 
-        console.log("Question submitted:", inputValue);
-
-        setMessages(prevMessages => [...prevMessages, userMessage]); //Add user message to end of the chat
-
-        setInputValue(""); // Clear input after sending
+        setMessages(prev => [...prev, userMessage]);
+        setInputValue("");
 
         const botMessage = await askQuestion(inputValue);
         if (botMessage) {
-            setMessages(prevMessages => [...prevMessages, botMessage]); //Add bot response to end of the chat
+            setMessages(prev => [...prev, botMessage]);
         }
     }
 
-    const handleEnterKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
-        if (event.key === 'Enter') {
-            handleSend();
+    // --- File Upload Handlers ---
+
+    const handleBookClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setIsIngesting(true);
+        
+        // Add a system message to the chat
+        const systemMsg: Message = {
+            id: Date.now(),
+            text: `Uploading and indexing "${file.name}"...`,
+            sender: 'bot'
+        };
+        setMessages(prev => [...prev, systemMsg]);
+
+        const result = await uploadPDF(file);
+
+        if (result) {
+            setMessages(prev => [...prev, {
+                id: Date.now(),
+                text: `Success: ${file.name} is now in the knowledge base.`,
+                sender: 'bot'
+            }]);
+        } else {
+            setMessages(prev => [...prev, {
+                id: Date.now(),
+                text: `Failed to upload ${file.name}. Please try again.`,
+                sender: 'bot'
+            }]);
         }
+
+        setIsIngesting(false);
+        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input
+    };
+
+    // Handle Enter key press in input
+    const handleEnterKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') handleSend();
     }
 
     return (
         <div className={styles.pageContainer}>
             <div className={styles.contentWrapper}>
 
-                {/* Title Section */}
-                {messages.length === 0 && ( // Show title only if no messages yet
+                {messages.length === 0 && (
                     <div className={styles.headerSection}>
                         <h1 className={styles.mainTitle}>Ask me a question!</h1>
                     </div>
                 )}
 
-                {/* Messages History Display Area */}
                 <div className={styles.messageHistory}>
-                  {messages.map((message) => ( //For each message in messages array
+                  {messages.map((message) => (
                     <div key={message.id} className={`${styles.messageRow} ${styles[message.sender]}`}>
                         <div className={styles.messageBubble}>
                           {message.text}
@@ -109,27 +165,45 @@ const Search: React.FC = () => {
                   ))}
                 </div>
 
-                {/* The Input Box Section */}
                 <div className={styles.searchContainer}>
+                    {/* Hidden File Input */}
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        style={{ display: 'none' }} 
+                        accept=".pdf"
+                        onChange={handleFileChange}
+                    />
 
-                    {/* The Text Input */}
                     <input
                         type="text"
                         className={styles.searchInput}
-                        placeholder="Ask your question here..."
+                        placeholder={isIngesting ? "Processing document..." : "Ask your question here..."}
                         value={inputValue}
                         onChange={handleInputChange}
                         onKeyDown={handleEnterKey}
+                        disabled={isIngesting}
                     />
 
-                    {/* Right Actions */}
                     <div className={styles.rightActions}>
-                        <div className={styles.iconButton} role="button" aria-label="Submit Question" onClick={handleSend}>
+                        <div 
+                            className={styles.iconButton} 
+                            role="button" 
+                            aria-label="Upload File" 
+                            onClick={handleBookClick}
+                        >
+                            <BiBook />
+                        </div>
+                        <div 
+                            className={styles.iconButton} 
+                            role="button" 
+                            aria-label="Submit Question" 
+                            onClick={handleSend}
+                        >
                             <BiArrowToRight />
                         </div>
                     </div>
                 </div>
-
             </div>
         </div>
     );
