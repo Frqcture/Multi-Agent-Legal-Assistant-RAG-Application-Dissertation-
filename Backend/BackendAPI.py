@@ -9,8 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from index import RAGEngine
 from ingest import run_ingestion
 import shutil
+from sqlalchemy.orm import Session
 from pathlib import Path
+from database import engine, Base, get_db
+from models import User
 
+Base.metadata.create_all(bind=engine)
 app = FastAPI(title="BackendAPI")
 
 app.add_middleware(
@@ -23,29 +27,17 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-# Simple mock database - replace with a real DB (Postgres/SQLite) later
-users_db = {
-    "john_doe": {
-        "username": "john_doe",
-        "hashed_password": hash_password("secret123"),
-        "id": "user_abc_123"
-    },
-    "joe_moore": {
-        "username": "joe_moore",
-        "hashed_password": hash_password("password"),
-        "id": "user1"
-    }
-}
-
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Validates the JWT token and returns the user's data."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None: raise HTTPException(status_code=401)
-        user = users_db.get(username)
+
+        user = db.query(User).filter(User.username == username).first()
         if user is None: raise HTTPException(status_code=401)
         return user
+
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -57,13 +49,32 @@ class QueryRequest(BaseModel):
     question: str
 
 @app.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = users_db.get(form_data.username)
-    if not user or not verify_password(form_data.password, user["hashed_password"]):
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == form_data.username).first()
+
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect username or password")
 
-    access_token = create_access_token(data={"sub": user["username"]})
+    access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/register")
+async def register(username: str, password: str, db: Session = Depends(get_db)):
+    # Check if user exists
+    existing_user = db.query(User).filter(User.username == username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+    # Create new user with hashed password
+    new_user = User(
+        username=username,
+        hashed_password=hash_password(password)  # From your auth_utils
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": "User created successfully"}
 
 @app.post("/ask")
 async def ask_question(request: QueryRequest, current_user: dict = Depends(get_current_user)):
