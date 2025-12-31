@@ -1,10 +1,21 @@
-/* src/App.tsx */
-import Search from './Components/Search/search';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Login from './Components/Login/Login';
+import Search from '././Components/Search/Search';
 
 function App() {
+  const isAuthenticated = !!localStorage.getItem('access_token');
+
   return (
-    // We don't need any extra wrappers here as GeminiSearch handles its own layout
-    <Search />
+    <Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route 
+          path="/search" 
+          element={isAuthenticated ? <Search /> : <Navigate to="/login" />} 
+        />
+        <Route path="*" element={<Navigate to="/login" />} />
+      </Routes>
+    </Router>
   );
 }
 

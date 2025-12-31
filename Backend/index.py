@@ -23,7 +23,7 @@ class RAGEngine:
         self.vectorstore = self._setup_vectorstore()
 
         # 3. Setup the Chain (Done once)
-        self.rag_chain = self._setup_chain()
+        # self.rag_chain = self._setup_chain()
 
     def _setup_vectorstore(self):
         if os.path.exists(self.persist_directory):
@@ -42,21 +42,25 @@ class RAGEngine:
                 persist_directory=self.persist_directory
             )
 
-    def _setup_chain(self):
-        retriever = self.vectorstore.as_retriever()
+    def query(self, question: str, user_id: str):  # Accept user_id
+        # Create a filtered retriever for this specific query
+        # This prevents User A from ever 'seeing' User B's documents
+        retriever = self.vectorstore.as_retriever(
+            search_kwargs={'filter': {'user_id': user_id}}
+        )
+
         template = """
         You are a helpful assistant. Answer the question based only on the following context. You should give references in the format [document_name, page_number] for every bit of information that you use.
         Context: {context}
         Question: {question}
         """
         prompt = ChatPromptTemplate.from_template(template)
-        return (
+
+        # Build and invoke the chain
+        chain = (
                 {"context": retriever, "question": RunnablePassthrough()}
                 | prompt
                 | self.llm
                 | StrOutputParser()
         )
-
-    def query(self, question: str):
-        # This is the only part that runs on every API call
-        return self.rag_chain.invoke(question)
+        return chain.invoke(question)

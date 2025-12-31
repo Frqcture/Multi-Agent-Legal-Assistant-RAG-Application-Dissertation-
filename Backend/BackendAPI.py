@@ -1,5 +1,8 @@
 import os
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from auth_utils import verify_password, create_access_token, hash_password, ALGORITHM, SECRET_KEY
+from jose import jwt, JWTError
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 # This assumes your RAG class is in a file named rag_engine.py
@@ -18,6 +21,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+# Simple mock database - replace with a real DB (Postgres/SQLite) later
+users_db = {
+    "john_doe": {
+        "username": "john_doe",
+        "hashed_password": hash_password("secret123"),
+        "id": "user_abc_123"
+    },
+    "joe_moore": {
+        "username": "joe_moore",
+        "hashed_password": hash_password("password"),
+        "id": "user1"
+    }
+}
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    """Validates the JWT token and returns the user's data."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None: raise HTTPException(status_code=401)
+        user = users_db.get(username)
+        if user is None: raise HTTPException(status_code=401)
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
 # 1. Start the engine
 rag_app = RAGEngine()
 
@@ -25,15 +56,23 @@ rag_app = RAGEngine()
 class QueryRequest(BaseModel):
     question: str
 
+@app.post("/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = users_db.get(form_data.username)
+    if not user or not verify_password(form_data.password, user["hashed_password"]):
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+
+    access_token = create_access_token(data={"sub": user["username"]})
+    return {"access_token": access_token, "token_type": "bearer"}
+
 @app.post("/ask")
-async def ask_question(request: QueryRequest):
+async def ask_question(request: QueryRequest, current_user: dict = Depends(get_current_user)):
     """
     Takes a question, searches the PDF, and returns an answer.
     """
     try:
         # We access the question via request.question thanks to Pydantic
-        answer = rag_app.query(request.question)
-        print(answer)
+        answer = rag_app.query(request.question, user_id=current_user["id"])
         return {"answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -49,7 +88,7 @@ UPLOAD_DIR = "DocsToIngest"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     # 1. Validate file type
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
@@ -64,7 +103,7 @@ async def upload_file(file: UploadFile = File(...)):
 
     # 3. Trigger Ingestion
     try:
-        ingest_status = run_ingestion()
+        ingest_status = run_ingestion(user_id=current_user["id"])
 
         # 4. Refresh the RAG Engine so it sees the new vectors
         global rag_app
