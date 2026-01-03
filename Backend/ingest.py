@@ -39,7 +39,7 @@ def update_processed_files(filename):
 # --- 3. Main Ingestion Logic ---
 # ... (all your existing imports)
 
-def run_ingestion():
+def run_ingestion(user_id: str):
     """Programmatic entry point for the API"""
     # Initialize components
     embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
@@ -67,6 +67,12 @@ def run_ingestion():
         docs = loader.load()
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         splits = text_splitter.split_documents(docs)
+
+        # CRITICAL: Attach the user_id to the metadata of every single chunk
+        # THIS DISS-ALLOWS USERS SEEING EACH OTHERS DATA
+        for split in splits:
+            split.metadata["user_id"] = user_id
+            split.metadata["document_name"] = filename
 
         vectorstore.add_documents(documents=splits)
         update_processed_files(filename)

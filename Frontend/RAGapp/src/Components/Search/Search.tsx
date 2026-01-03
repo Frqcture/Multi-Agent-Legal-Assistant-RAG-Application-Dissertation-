@@ -1,6 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import styles from './Search.module.css';
-import { BiArrowToRight, BiBook, BiLoaderAlt } from "react-icons/bi";
+import { BiArrowToRight, BiBook } from "react-icons/bi";
 
 // Define the structure of a message
 interface Message {
@@ -23,6 +24,8 @@ const BASE_URL = 'http://192.168.1.74:8000';
 
 // Function to ask a question to the backend API
 async function askQuestion(question: string): Promise<Message | void> {
+    const token = localStorage.getItem('access_token'); // Retrieve stored token
+
     const url = `${BASE_URL}/ask`;
     const payload: AskRequest = { question };
 
@@ -32,9 +35,16 @@ async function askQuestion(question: string): Promise<Message | void> {
             headers: {
                 'accept': 'application/json',
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify(payload),
         });
+
+        if (response.status === 401) {
+            // Handle expired token or unlogged user
+            window.location.href = '/login';
+            return;
+        }
 
         if (!response.ok) throw new Error(`Error! status: ${response.status}`);
 
@@ -51,6 +61,8 @@ async function askQuestion(question: string): Promise<Message | void> {
 
 // Function to handle the PDF upload
 async function uploadPDF(file: File): Promise<{ message: string; status: string } | null> {
+    const token = localStorage.getItem('access_token'); // Retrieve stored token
+
     const url = `${BASE_URL}/upload`;
     const formData = new FormData();
     formData.append('file', file);
@@ -58,7 +70,11 @@ async function uploadPDF(file: File): Promise<{ message: string; status: string 
     try {
         const response = await fetch(url, {
             method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`, // Send token to backend
+            },
             body: formData, // No headers needed, browser sets boundary
+            
         });
 
         if (!response.ok) throw new Error('Upload failed');
@@ -70,12 +86,22 @@ async function uploadPDF(file: File): Promise<{ message: string; status: string 
 }
 
 const Search: React.FC = () => {
+    const navigate = useNavigate(); // Initialize navigate
+
     const [inputValue, setInputValue] = useState<string>("");
     const [messages, setMessages] = useState<Message[]>([]);
     const [isIngesting, setIsIngesting] = useState<boolean>(false);
     
     // Ref to trigger the hidden file input
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Security Check: Redirect if no token is found
+    useEffect(() => {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            navigate('/login'); // Kick user back to login
+        }
+    }, [navigate]);
 
     // --- Input Handlers ---
     const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
