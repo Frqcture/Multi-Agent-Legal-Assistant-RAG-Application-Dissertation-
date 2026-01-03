@@ -60,16 +60,16 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 
 
 @app.post("/register")
-async def register(username: str, password: str, db: Session = Depends(get_db)):
+async def register(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     # Check if user exists
-    existing_user = db.query(User).filter(User.username == username).first()
+    existing_user = db.query(User).filter(User.username == form_data.username).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already registered")
 
     # Create new user with hashed password
     new_user = User(
-        username=username,
-        hashed_password=hash_password(password)  # From your auth_utils
+        username=form_data.username,
+        hashed_password=hash_password(form_data.password)  # From your auth_utils
     )
     db.add(new_user)
     db.commit()

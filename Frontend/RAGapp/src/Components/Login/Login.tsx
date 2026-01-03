@@ -44,6 +44,10 @@ const Login: React.FC = () => {
         }
     };
 
+    const handleRegisterRedirect = () => {
+        navigate('/register');
+    };
+
     return (
         <div className={styles.loginContainer}>
             <form className={styles.loginForm} onSubmit={handleLogin}>
@@ -70,9 +74,15 @@ const Login: React.FC = () => {
                     />
                 </div>
 
-                <button type="submit" disabled={isLoading}>
-                    {isLoading ? 'Authenticating...' : 'Login'}
-                </button>
+                <div className={styles.buttonGroup}>
+                  <button type="submit" disabled={isLoading}>
+                      {isLoading ? 'Authenticating...' : 'Login'}
+                  </button>
+
+                  <button onClick={handleRegisterRedirect}>
+                      <p className={styles.registerLink}>Create Account</p>
+                  </button>
+                </div>
             </form>
         </div>
     );
