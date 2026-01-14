@@ -114,7 +114,7 @@ async def upload_file(file: UploadFile = File(...), current_user: dict = Depends
 
     # 3. Trigger Ingestion
     try:
-        ingest_status = run_ingestion(user_id=current_user["id"])
+        ingest_status = run_ingestion(user_id=current_user.id)
 
         # 4. Refresh the RAG Engine so it sees the new vectors
         global rag_app
