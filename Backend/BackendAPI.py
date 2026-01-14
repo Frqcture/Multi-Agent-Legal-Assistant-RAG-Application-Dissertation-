@@ -5,7 +5,6 @@ from auth_utils import verify_password, create_access_token, hash_password, ALGO
 from jose import jwt, JWTError
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-# This assumes your RAG class is in a file named rag_engine.py
 from index import RAGEngine
 from ingest import run_ingestion
 import shutil
@@ -13,6 +12,15 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 from database import engine, Base, get_db
 from models import User
+# from pypdf import PdfReader
+# from slowapi import Limiter, _rate_limit_exceeded_handler
+# from slowapi.util import get_remote_address
+# from slowapi.errors import RateLimitExceeded
+#
+# # Initialize the limiter - using IP address for anonymous/login tracking
+# limiter = Limiter(key_func=get_remote_address)
+# app.state.limiter = limiter
+# app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 Base.metadata.create_all(bind=engine)
 
@@ -43,6 +51,20 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+def is_pdf_safe(file_path):
+    #TODO - Add functionality to see if the PDF is a "ZIP Bomb" by creating a seperate instance with limited resources.
+
+    try:
+        reader = PdfReader(file_path)
+        # Attempt to access the number of pages to trigger basic parsing
+        _ = len(reader.pages)
+        # Check for encrypted files which can break ingestion
+        if reader.is_encrypted:
+            return False, "Encrypted PDFs are not supported."
+        return True, "Safe"
+    except Exception:
+        return False, "Malformed or corrupted PDF structure."
+
 # 1. Start the engine
 rag_app = RAGEngine()
 
@@ -51,7 +73,8 @@ class QueryRequest(BaseModel):
     question: str
 
 @app.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+# @limiter.limit("5/minute") # Allow 5 attempts per minute per IP
+async def login(, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form_data.username).first()
 
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -132,6 +155,9 @@ async def upload_file(file: UploadFile = File(...), current_user: dict = Depends
             shutil.copyfileobj(file.file, buffer)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+
+    if not(is_pdf_safe(file_path)):
+        raise HTTPException(status_code=400, detail="PDF is not safe.")
 
     # Trigger Ingestion
     try:
