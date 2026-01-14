@@ -62,7 +62,9 @@ def run_ingestion(user_id: str):
         return "No new documents found."
 
     for filename in new_files:
-        file_path = os.path.join(SOURCE_DIRECTORY, filename)
+        # file_path = os.path.join(SOURCE_DIRECTORY, filename)
+        safe_filename = os.path.basename(filename)
+        file_path = os.path.join(SOURCE_DIRECTORY, safe_filename)
         loader = PyPDFLoader(file_path)
         docs = loader.load()
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)

@@ -15,6 +15,8 @@ from database import engine, Base, get_db
 from models import User
 
 Base.metadata.create_all(bind=engine)
+
+MAX_FILE_SIZE = 15 * 1024 * 1024
 app = FastAPI(title="BackendAPI")
 
 app.add_middleware(
@@ -83,7 +85,7 @@ async def ask_question(request: QueryRequest, current_user: dict = Depends(get_c
     """
     try:
         # We access the question via request.question thanks to Pydantic
-        answer = rag_app.query(request.question, user_id=current_user["id"])
+        answer = rag_app.query(request.question, user_id=current_user.id)
         return {"answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -100,23 +102,42 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    # 1. Validate file type
+    filename = os.path.basename(file.filename)
+
+    # Validate file type
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
-    # 2. Save the file to the source directory
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    # Validate file size
+    # file.size is available in modern FastAPI/Starlette versions
+    if file.size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum allowed size is {MAX_FILE_SIZE / (1024 * 1024)}MB."
+        )
+
+    # Extract only the base name (prevents ../../ logic)
+    safe_filename = os.path.basename(file.filename)
+
+    # Create absolute paths for comparison
+    base_dir = Path(UPLOAD_DIR).resolve()
+    file_path = (base_dir / safe_filename).resolve()
+
+    # Security Check: Ensure the file path is actually inside base_dir
+    if not str(file_path).startswith(str(base_dir)):
+        raise HTTPException(status_code=400, detail="Invalid filename detected.")
+
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
-    # 3. Trigger Ingestion
+    # Trigger Ingestion
     try:
         ingest_status = run_ingestion(user_id=current_user.id)
 
-        # 4. Refresh the RAG Engine so it sees the new vectors
+        # Refresh the RAG Engine so it sees the new vectors
         global rag_app
         rag_app = RAGEngine()
 
