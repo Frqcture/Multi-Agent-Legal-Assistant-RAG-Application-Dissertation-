@@ -7,6 +7,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_ollama import ChatOllama,OllamaEmbeddings
 
 
 class RAGEngine:
@@ -16,13 +17,19 @@ class RAGEngine:
         self.pdf_path = pdf_path
 
         # 1. Initialize Models (Done once)
-        self.embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
-        self.llm = ChatOpenAI(model_name="gpt-5-mini", temperature=0)
+        # self.embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
+        self.embedding_model = OllamaEmbeddings(model="embeddinggemma")
+
+        # This is where we would query OpenAI for a response
+        #self.llm = ChatOpenAI(model_name="gpt-5-mini", temperature=0)
+
+        #This is the method to run the model locally
+        self.llm = ChatOllama(model="gemma3:4b", temperature=0)
 
         # 2. Load/Create Vectorstore (Done once)
         self.vectorstore = self._setup_vectorstore()
 
-        # 3. Setup the Chain (Done once)
+        # 3. Set up the Chain (Done once)
         # self.rag_chain = self._setup_chain()
 
     def _setup_vectorstore(self):

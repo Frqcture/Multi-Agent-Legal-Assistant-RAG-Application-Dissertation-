@@ -19,8 +19,7 @@ interface AskResponse {
 }
 
 // --- API Helpers ---
-
-const BASE_URL = 'http://192.168.128.36:8000';
+const BASE_URL = 'http://192.168.0.117:8000';
 
 // Function to ask a question to the backend API
 async function askQuestion(question: string): Promise<Message | void> {

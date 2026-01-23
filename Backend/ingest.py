@@ -9,6 +9,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_ollama import OllamaEmbeddings
 
 # --- 1. Configuration ---
 # Define the paths for your source documents, persistent storage, and log file (Stores previously ingested filenames).
@@ -42,7 +43,8 @@ def update_processed_files(filename):
 def run_ingestion(user_id: str):
     """Programmatic entry point for the API"""
     # Initialize components
-    embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
+    # embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
+    embedding_model = OllamaEmbeddings(model="embeddinggemma")
 
     # Ensure directories exist
     if not os.path.exists(SOURCE_DIRECTORY):
