@@ -96,6 +96,9 @@ const Search: React.FC = () => {
     const [inputValue, setInputValue] = useState<string>("");
     const [messages, setMessages] = useState<Message[]>([]);
     const [isIngesting, setIsIngesting] = useState<boolean>(false);
+
+    const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+    const [userFiles, setUserFiles] = useState<string[]>([]);
     
     // Ref to trigger the hidden file input
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -107,6 +110,42 @@ const Search: React.FC = () => {
             navigate('/login'); // Kick user back to login
         }
     }, [navigate]);
+
+    const fetchFiles = async () => {
+        const token = localStorage.getItem('access_token');
+        try {
+            const response = await fetch(`${BASE_URL}/files`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setUserFiles(data.files);
+            }
+        } catch (error) {
+            console.error("Failed to fetch files:", error);
+        }
+    };
+
+    const handleDeleteFile = async (filename: string) => {
+        const token = localStorage.getItem('access_token');
+        try {
+            const response = await fetch(`${BASE_URL}/files/${encodeURIComponent(filename)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                // Refresh list after deletion
+                setUserFiles(prev => prev.filter(f => f !== filename));
+            }
+        } catch (error) {
+            console.error("Delete failed:", error);
+        }
+    };
+
+    const handleOpenLibrary = () => {
+        setIsModalOpen(true);
+        fetchFiles();
+    };
 
     // --- Input Handlers ---
     const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
