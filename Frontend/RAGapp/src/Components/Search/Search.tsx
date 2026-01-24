@@ -1,8 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Search.module.css';
-import { BiArrowToRight, BiBook } from "react-icons/bi";
+import { BiArrowToRight, BiBook, BiLibrary } from "react-icons/bi";
 import { CiLogout } from "react-icons/ci";
+import { FiX, FiTrash2 } from 'react-icons/fi';
 
 // Define the structure of a message
 interface Message {
@@ -96,6 +97,9 @@ const Search: React.FC = () => {
     const [inputValue, setInputValue] = useState<string>("");
     const [messages, setMessages] = useState<Message[]>([]);
     const [isIngesting, setIsIngesting] = useState<boolean>(false);
+
+    const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+    const [userFiles, setUserFiles] = useState<string[]>([]);
     
     // Ref to trigger the hidden file input
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -107,6 +111,42 @@ const Search: React.FC = () => {
             navigate('/login'); // Kick user back to login
         }
     }, [navigate]);
+
+    const fetchFiles = async () => {
+        const token = localStorage.getItem('access_token');
+        try {
+            const response = await fetch(`${BASE_URL}/files`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setUserFiles(data.files);
+            }
+        } catch (error) {
+            console.error("Failed to fetch files:", error);
+        }
+    };
+
+    const handleDeleteFile = async (filename: string) => {
+        const token = localStorage.getItem('access_token');
+        try {
+            const response = await fetch(`${BASE_URL}/files/${encodeURIComponent(filename)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                // Refresh list after deletion
+                setUserFiles(prev => prev.filter(f => f !== filename));
+            }
+        } catch (error) {
+            console.error("Delete failed:", error);
+        }
+    };
+
+    const handleOpenLibrary = () => {
+        setIsModalOpen(true);
+        fetchFiles();
+    };
 
     // --- Input Handlers ---
     const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,9 +219,11 @@ const Search: React.FC = () => {
     return (
         <div className={styles.pageContainer}>
             <div className={styles.navbar}>
-                <button onClick={logoutUser}>
-                    <CiLogout />
-                    Logout  
+                <button className={styles.navButton} onClick={handleOpenLibrary}>
+                  <BiLibrary /> Library
+                </button>
+                <button className={styles.navButton} onClick={logoutUser}>
+                    <CiLogout /> Logout  
                 </button>
             </div>
             <div className={styles.contentWrapper}>
@@ -242,6 +284,33 @@ const Search: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* --- Library Modal Popup --- */}
+            {isModalOpen && (
+                <div className={styles.modalOverlay} onClick={() => setIsModalOpen(false)}>
+                    <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+                        <div className={styles.modalHeader}>
+                            <h2>Your Uploaded Documents</h2>
+                            <FiX className={styles.closeIcon} onClick={() => setIsModalOpen(false)} />
+                        </div>
+                        <div className={styles.fileList}>
+                            {userFiles.length === 0 ? (
+                                <p className={styles.emptyMsg}>No documents uploaded yet.</p>
+                            ) : (
+                                userFiles.map((filename) => (
+                                    <div key={filename} className={styles.fileItem}>
+                                        <span className={styles.fileName}>{filename}</span>
+                                        <FiTrash2 
+                                            className={styles.deleteIcon} 
+                                            onClick={() => handleDeleteFile(filename)} 
+                                        />
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

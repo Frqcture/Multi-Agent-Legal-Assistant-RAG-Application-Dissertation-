@@ -173,3 +173,47 @@ async def upload_file(request: Request, file: UploadFile = File(...), current_us
         return {"message": "File uploaded and ingested successfully", "status": ingest_status}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+
+
+@app.get("/files")
+async def list_files(current_user: dict = Depends(get_current_user)):
+    """Returns a list of all files the current user has uploaded."""
+    try:
+        files = rag_app.list_user_files(user_id=current_user.id)
+        return {"files": files}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/files/{filename}")
+async def delete_file(filename: str, current_user: dict = Depends(get_current_user)):
+    """Removes a specific file from the vector store and the ingestion log."""
+    try:
+        # 1. Remove from ChromaDB
+        deleted = rag_app.delete_file(user_id=current_user.id, filename=filename)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="File not found in vector store.")
+
+        # 2. Cleanup physical file and Log (Optional but recommended)
+        # This allows the user to re-upload the same filename later
+        from ingest import LOG_FILE
+
+        # Remove from IngestedFiles.log
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, "r") as f:
+                lines = f.readlines()
+            with open(LOG_FILE, "w") as f:
+                for line in lines:
+                    if line.strip() != filename:
+                        f.write(line)
+
+        # Remove from local storage
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        return {"message": f"Successfully deleted {filename}"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

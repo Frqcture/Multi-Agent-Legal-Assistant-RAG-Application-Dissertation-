@@ -67,6 +67,7 @@ class RAGEngine:
         return "\n\n".join(formatted_chunks)
 
     def query(self, question: str, user_id: str):  # Accept user_id
+        """Gets the context and queries the LLM with the given question and this context"""
         # Create a filtered retriever for this specific query
         # This prevents User A from ever 'seeing' User B's documents
         retriever = self.vectorstore.as_retriever(
@@ -113,3 +114,33 @@ class RAGEngine:
         # print(chain.context)
 
         return chain.invoke(question)
+
+    def list_user_files(self, user_id: str):
+        """Retrieves a unique list of filenames uploaded by the user"""
+        # Get all documents belonging to the user
+        results = self.vectorstore.get(
+            where = {"user_id": user_id},
+            include = ["metadatas"]
+        )
+
+        # Extract all unique document names from metadata.
+        filenames = {meta["document_name"] for meta in results["metadatas"] if "document_name" in meta}
+        return list(filenames)
+
+    def delete_file(self, user_id: str, filename: str):
+        """Deletes all chunks associated with a given user and filename"""
+
+        # Find the ID's of al chunks matching both user_id and filename
+        results = self.vectorstore.get(
+            where={
+                "$and": [
+                    {"user_id": user_id},
+                    {"document_name": filename}
+                ]
+            }
+        )
+
+        if results["ids"]:
+            self.vectorstore.delete(ids=results["ids"])
+            return True
+        return False
