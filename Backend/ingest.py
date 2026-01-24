@@ -69,14 +69,17 @@ def run_ingestion(user_id: str):
         file_path = os.path.join(SOURCE_DIRECTORY, safe_filename)
         loader = PyPDFLoader(file_path)
         docs = loader.load()
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-        splits = text_splitter.split_documents(docs)
 
         # CRITICAL: Attach the user_id to the metadata of every single chunk
         # THIS DISS-ALLOWS USERS SEEING EACH OTHERS DATA
-        for split in splits:
-            split.metadata["user_id"] = user_id
-            split.metadata["document_name"] = filename
+        for doc in docs:
+            doc.metadata["user_id"] = user_id
+            doc.metadata["document_name"] = filename
+            doc.metadata["page_number"] = doc.metadata.get("page", 0) + 1
+
+        # If I split after attaching metadata, then metadata will automatically propogate to each chunk.
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        splits = text_splitter.split_documents(docs)
 
         vectorstore.add_documents(documents=splits)
         update_processed_files(filename)

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Login.module.css';
 
-const BASE_URL = 'http://192.168.0.117:8000'; // Match your BackendAPI.py URL
+const BASE_URL = 'http://0.0.0.0:8000'; // Match your BackendAPI.py URL
 
 const Login: React.FC = () => {
     const [username, setUsername] = useState('');
