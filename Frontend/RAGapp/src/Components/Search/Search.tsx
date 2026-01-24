@@ -1,8 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Search.module.css';
-import { BiArrowToRight, BiBook } from "react-icons/bi";
+import { BiArrowToRight, BiBook, BiLibrary } from "react-icons/bi";
 import { CiLogout } from "react-icons/ci";
+import { FiX, FiTrash2 } from 'react-icons/fi';
 
 // Define the structure of a message
 interface Message {
@@ -218,9 +219,11 @@ const Search: React.FC = () => {
     return (
         <div className={styles.pageContainer}>
             <div className={styles.navbar}>
-                <button onClick={logoutUser}>
-                    <CiLogout />
-                    Logout  
+                <button className={styles.navButton} onClick={handleOpenLibrary}>
+                  <BiLibrary /> Library
+                </button>
+                <button className={styles.navButton} onClick={logoutUser}>
+                    <CiLogout /> Logout  
                 </button>
             </div>
             <div className={styles.contentWrapper}>
@@ -281,6 +284,33 @@ const Search: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* --- Library Modal Popup --- */}
+            {isModalOpen && (
+                <div className={styles.modalOverlay} onClick={() => setIsModalOpen(false)}>
+                    <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+                        <div className={styles.modalHeader}>
+                            <h2>Your Uploaded Documents</h2>
+                            <FiX className={styles.closeIcon} onClick={() => setIsModalOpen(false)} />
+                        </div>
+                        <div className={styles.fileList}>
+                            {userFiles.length === 0 ? (
+                                <p className={styles.emptyMsg}>No documents uploaded yet.</p>
+                            ) : (
+                                userFiles.map((filename) => (
+                                    <div key={filename} className={styles.fileItem}>
+                                        <span className={styles.fileName}>{filename}</span>
+                                        <FiTrash2 
+                                            className={styles.deleteIcon} 
+                                            onClick={() => handleDeleteFile(filename)} 
+                                        />
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -15,6 +15,10 @@
     position: absolute;
     top: 16px;
     right: 24px;
+    display: flex;         /* Enables side-by-side alignment */
+    flex-direction: row;   /* Ensures horizontal flow */
+    gap: 12px;             /* Adds space between the two buttons */
+    align-items: center;
 }
 
 .contentWrapper {
@@ -140,4 +144,120 @@
     background-color: #191919; /* Gemini often uses no bubble for AI */
     color: #e3e3e3;
     border-bottom-left-radius: 4px;
+}
+
+.navButton {
+    background: transparent;
+    border: none;
+    color: #a8a8a8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.navButton:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Modal Styles */
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px); /* Adds a nice blur effect to the background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modalContent {
+    background-color: #1e1e1e; /* Matching your search container */
+    width: 90%;
+    max-width: 500px;
+    border-radius: 24px;
+    padding: 24px;
+    border: 1px solid #333;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.modalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modalHeader h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 500;
+}
+
+.closeIcon {
+    font-size: 1.5rem;
+    color: #8e8e8e;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.closeIcon:hover {
+    color: #ffffff;
+}
+
+.fileList {
+    max-height: 400px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.fileItem {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background-color: #2a2a2a;
+    border-radius: 12px;
+    transition: background-color 0.2s;
+}
+
+.fileItem:hover {
+    background-color: #333;
+}
+
+.fileName {
+    font-size: 0.95rem;
+    color: #e3e3e3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 12px;
+}
+
+.deleteIcon {
+    color: #8e8e8e;
+    cursor: pointer;
+    transition: color 0.2s;
+    min-width: 18px;
+}
+
+.deleteIcon:hover {
+    color: #ff4d4d; /* Red highlight for delete */
+}
+
+.emptyMsg {
+    text-align: center;
+    color: #8e8e8e;
+    padding: 20px 0;
 }
