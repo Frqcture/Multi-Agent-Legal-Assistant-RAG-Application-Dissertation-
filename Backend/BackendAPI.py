@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi import Request
 from auth_utils import verify_password, create_access_token, hash_password, ALGORITHM, SECRET_KEY
 from jose import jwt, JWTError
 from pydantic import BaseModel
@@ -13,11 +14,17 @@ from pathlib import Path
 from database import engine, Base, get_db
 from models import User
 from pypdf import PdfReader
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 Base.metadata.create_all(bind=engine)
 
 MAX_FILE_SIZE = 15 * 1024 * 1024
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="BackendAPI")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -65,8 +72,8 @@ class QueryRequest(BaseModel):
     question: str
 
 @app.post("/login")
-# @limiter.limit("5/minute") # Allow 5 attempts per minute per IP
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login( request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form_data.username).first()
 
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -77,7 +84,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 
 
 @app.post("/register")
-async def register(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     # Check if user exists
     existing_user = db.query(User).filter(User.username == form_data.username).first()
     if existing_user:
@@ -94,19 +102,21 @@ async def register(form_data: OAuth2PasswordRequestForm = Depends(), db: Session
     return {"message": "User created successfully"}
 
 @app.post("/ask")
-async def ask_question(request: QueryRequest, current_user: dict = Depends(get_current_user)):
+@limiter.limit("20/minute")
+async def ask_question(request: Request, query_request: QueryRequest, current_user: dict = Depends(get_current_user)):
     """
     Takes a question, searches the PDF, and returns an answer.
     """
     try:
         # We access the question via request.question thanks to Pydantic
-        answer = rag_app.query(request.question, user_id=current_user.id)
+        answer = rag_app.query(query_request.question, user_id=current_user.id)
         return {"answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/refresh")
-async def refresh():
+@limiter.limit("5/minute")
+async def refresh(request: Request):
     """Reloads the vector store if the PDF has changed."""
     global rag_app
     rag_app = RAGEngine()
@@ -116,7 +126,8 @@ UPLOAD_DIR = "DocsToIngest"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+@limiter.limit("5/minute")
+async def upload_file(request: Request, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     filename = os.path.basename(file.filename)
 
     # Validate file type
