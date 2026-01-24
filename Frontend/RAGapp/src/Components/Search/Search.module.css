@@ -11,6 +11,12 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+.navbar {
+    position: absolute;
+    top: 16px;
+    right: 24px;
+}
+
 .contentWrapper {
     width: 100%;
     max-width: 768px; /* Standard tablet/small laptop width */

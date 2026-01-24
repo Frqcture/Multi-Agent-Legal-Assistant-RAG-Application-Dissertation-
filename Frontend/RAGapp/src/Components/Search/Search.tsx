@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Search.module.css';
 import { BiArrowToRight, BiBook } from "react-icons/bi";
+import { CiLogout } from "react-icons/ci";
 
 // Define the structure of a message
 interface Message {
@@ -20,6 +21,11 @@ interface AskResponse {
 
 // --- API Helpers ---
 const BASE_URL = 'http://192.168.0.117:8000';
+
+async function logoutUser() {
+    localStorage.removeItem('access_token');
+    window.location.href = '/login';
+}
 
 // Function to ask a question to the backend API
 async function askQuestion(question: string): Promise<Message | void> {
@@ -172,6 +178,12 @@ const Search: React.FC = () => {
 
     return (
         <div className={styles.pageContainer}>
+            <div className={styles.navbar}>
+                <button onClick={logoutUser}>
+                    <CiLogout />
+                    Logout  
+                </button>
+            </div>
             <div className={styles.contentWrapper}>
 
                 {messages.length === 0 && (

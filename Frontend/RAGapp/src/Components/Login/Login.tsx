@@ -36,7 +36,7 @@ const Login: React.FC = () => {
             
             // Store the token and redirect to search
             localStorage.setItem('access_token', data.access_token);
-            navigate('/search'); 
+            window.location.href = '/search';
         } catch (err: any) {
             setError(err.message);
         } finally {
