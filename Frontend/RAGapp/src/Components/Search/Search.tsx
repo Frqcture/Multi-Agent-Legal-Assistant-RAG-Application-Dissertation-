@@ -20,7 +20,7 @@ interface AskResponse {
 }
 
 // --- API Helpers ---
-const BASE_URL = 'http://192.168.0.117:8000';
+const BASE_URL = 'http://0.0.0.0:8000';
 
 async function logoutUser() {
     localStorage.removeItem('access_token');
