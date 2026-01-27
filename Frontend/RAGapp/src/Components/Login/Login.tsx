@@ -32,10 +32,7 @@ const Login: React.FC = () => {
                 throw new Error(errorData.detail || 'Login failed');
             }
 
-            const data = await response.json();
-            
-            // Store the token and redirect to search
-            localStorage.setItem('access_token', data.access_token);
+            // Redirect user to /search on successful login
             window.location.href = '/search';
         } catch (err: any) {
             setError(err.message);

@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import Request
 from auth_utils import verify_password, create_access_token, hash_password, ALGORITHM, SECRET_KEY
@@ -28,7 +28,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, use your specific frontend URL
+    allow_origins=["http://localhost:5173"], # In production, use your specific frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,8 +36,14 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(request: Request, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Validates the JWT token and returns the user's data."""
+
+    token = request.cookies.get("access_token")
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
@@ -64,23 +70,47 @@ def is_pdf_safe(file_path):
     except Exception:
         return False, "Malformed or corrupted PDF structure."
 
-# 1. Start the engine
+# Start the engine
 rag_app = RAGEngine()
 
-# 2. Define exactly what the user should send
+# Define exactly what the user should send
 class QueryRequest(BaseModel):
     question: str
 
+@app.get("/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    """
+    Returns the current user's information
+    This is used to validate if the user is logged in when the site is initially loaded
+    """
+
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "message": "Authenticated"
+    }
+
 @app.post("/login")
 @limiter.limit("5/minute")
-async def login( request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login( response: Response, request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form_data.username).first()
 
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect username or password")
 
     access_token = create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    response.set_cookie(
+        key = "access_token",
+        value = access_token,
+        httponly = True,
+        max_age = 60 * 60 * 24,
+        expires = 60 * 60 * 24,
+        samesite = "lax",
+        secure = False # Set this to true in production, it requires SSL Certificate
+    )
+
+    return {"message" : "Login Successful"}
 
 
 @app.post("/register")
@@ -189,13 +219,12 @@ async def list_files(current_user: dict = Depends(get_current_user)):
 async def delete_file(filename: str, current_user: dict = Depends(get_current_user)):
     """Removes a specific file from the vector store and the ingestion log."""
     try:
-        # 1. Remove from ChromaDB
+        # Remove from ChromaDB
         deleted = rag_app.delete_file(user_id=current_user.id, filename=filename)
 
         if not deleted:
             raise HTTPException(status_code=404, detail="File not found in vector store.")
 
-        # 2. Cleanup physical file and Log (Optional but recommended)
         # This allows the user to re-upload the same filename later
         from ingest import LOG_FILE
 

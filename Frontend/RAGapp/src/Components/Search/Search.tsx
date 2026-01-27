@@ -30,7 +30,6 @@ async function logoutUser() {
 
 // Function to ask a question to the backend API
 async function askQuestion(question: string): Promise<Message | void> {
-    const token = localStorage.getItem('access_token'); // Retrieve stored token
 
     const url = `${BASE_URL}/ask`;
     const payload: AskRequest = { question };
@@ -41,8 +40,8 @@ async function askQuestion(question: string): Promise<Message | void> {
             headers: {
                 'accept': 'application/json',
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
             },
+            credentials: 'include',
             body: JSON.stringify(payload),
         });
 
@@ -67,7 +66,6 @@ async function askQuestion(question: string): Promise<Message | void> {
 
 // Function to handle the PDF upload
 async function uploadPDF(file: File): Promise<{ message: string; status: string } | null> {
-    const token = localStorage.getItem('access_token'); // Retrieve stored token
 
     const url = `${BASE_URL}/upload`;
     const formData = new FormData();
@@ -76,9 +74,7 @@ async function uploadPDF(file: File): Promise<{ message: string; status: string 
     try {
         const response = await fetch(url, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`, // Send token to backend
-            },
+            credentials: 'include',
             body: formData, // No headers needed, browser sets boundary
             
         });
@@ -113,10 +109,9 @@ const Search: React.FC = () => {
     }, [navigate]);
 
     const fetchFiles = async () => {
-        const token = localStorage.getItem('access_token');
         try {
             const response = await fetch(`${BASE_URL}/files`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                credentials: 'include'
             });
             if (response.ok) {
                 const data = await response.json();
@@ -128,11 +123,10 @@ const Search: React.FC = () => {
     };
 
     const handleDeleteFile = async (filename: string) => {
-        const token = localStorage.getItem('access_token');
         try {
             const response = await fetch(`${BASE_URL}/files/${encodeURIComponent(filename)}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
+                credentials: 'include'
             });
             if (response.ok) {
                 // Refresh list after deletion
