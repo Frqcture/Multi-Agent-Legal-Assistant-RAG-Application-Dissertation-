@@ -25,8 +25,24 @@ interface AskResponse {
 const BASE_URL = 'http://192.168.0.137:8000';
 
 async function logoutUser() {
-    localStorage.removeItem('access_token');
-    window.location.href = '/login';
+    try {
+      const response = await fetch(`${BASE_URL}/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if(!response.ok) {
+        console.error("Logout failed on server, but clearing client session.");
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      // Clear client-side breadcrumbs from old auth method
+      localStorage.removeItem('access_token');
+
+      // Redirect to login page
+      window.location.href = '/login';
+    }
 }
 
 // Function to ask a question to the backend API

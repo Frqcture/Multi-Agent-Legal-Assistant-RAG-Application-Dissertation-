@@ -125,6 +125,24 @@ async def login( response: Response, request: Request, form_data: OAuth2Password
 
     return response
 
+@app.post("/logout")
+@limiter.limit("5/minute")
+async def logout(response: Response, request: Request):
+    """Clears the session cookies related to the current user"""
+
+    content = {"message": "Logout Successful"}
+    response = JSONResponse(content=content)
+
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        samesite="lax",
+        secure=False,  # Set to True in production with HTTPS
+        path="/"  # Must match the path used when the cookie was set
+    )
+
+    return response
+
 @app.post("/register")
 @limiter.limit("5/minute")
 async def register(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
