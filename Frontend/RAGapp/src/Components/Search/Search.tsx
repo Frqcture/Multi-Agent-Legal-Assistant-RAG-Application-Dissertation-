@@ -4,6 +4,7 @@ import styles from './Search.module.css';
 import { BiArrowToRight, BiBook, BiLibrary } from "react-icons/bi";
 import { CiLogout } from "react-icons/ci";
 import { FiX, FiTrash2 } from 'react-icons/fi';
+import { useAuth } from '../useAuth';
 
 // Define the structure of a message
 interface Message {
@@ -21,16 +22,31 @@ interface AskResponse {
 }
 
 // --- API Helpers ---
-const BASE_URL = 'http://0.0.0.0:8000';
+const BASE_URL = 'http://192.168.0.137:8000';
 
 async function logoutUser() {
-    localStorage.removeItem('access_token');
-    window.location.href = '/login';
+    try {
+      const response = await fetch(`${BASE_URL}/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if(!response.ok) {
+        console.error("Logout failed on server, but clearing client session.");
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      // Clear client-side breadcrumbs from old auth method
+      localStorage.removeItem('access_token');
+
+      // Redirect to login page
+      window.location.href = '/login';
+    }
 }
 
 // Function to ask a question to the backend API
 async function askQuestion(question: string): Promise<Message | void> {
-    const token = localStorage.getItem('access_token'); // Retrieve stored token
 
     const url = `${BASE_URL}/ask`;
     const payload: AskRequest = { question };
@@ -41,8 +57,8 @@ async function askQuestion(question: string): Promise<Message | void> {
             headers: {
                 'accept': 'application/json',
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
             },
+            credentials: 'include',
             body: JSON.stringify(payload),
         });
 
@@ -67,7 +83,6 @@ async function askQuestion(question: string): Promise<Message | void> {
 
 // Function to handle the PDF upload
 async function uploadPDF(file: File): Promise<{ message: string; status: string } | null> {
-    const token = localStorage.getItem('access_token'); // Retrieve stored token
 
     const url = `${BASE_URL}/upload`;
     const formData = new FormData();
@@ -76,11 +91,8 @@ async function uploadPDF(file: File): Promise<{ message: string; status: string 
     try {
         const response = await fetch(url, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`, // Send token to backend
-            },
+            credentials: 'include',
             body: formData, // No headers needed, browser sets boundary
-            
         });
 
         if (!response.ok) throw new Error('Upload failed');
@@ -105,18 +117,25 @@ const Search: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Security Check: Redirect if no token is found
+    // useEffect(() => {
+    //     const token = localStorage.getItem('access_token');
+    //     if (!token) {
+    //         navigate('/login'); // Kick user back to login
+    //     }
+    // }, [navigate]);
+
+    const isAuthenticated = useAuth();
+
     useEffect(() => {
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-            navigate('/login'); // Kick user back to login
-        }
-    }, [navigate]);
+    if (isAuthenticated === null || false) {
+        navigate('/login');
+    }
+}, [isAuthenticated, navigate]);
 
     const fetchFiles = async () => {
-        const token = localStorage.getItem('access_token');
         try {
             const response = await fetch(`${BASE_URL}/files`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                credentials: 'include'
             });
             if (response.ok) {
                 const data = await response.json();
@@ -128,11 +147,10 @@ const Search: React.FC = () => {
     };
 
     const handleDeleteFile = async (filename: string) => {
-        const token = localStorage.getItem('access_token');
         try {
             const response = await fetch(`${BASE_URL}/files/${encodeURIComponent(filename)}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
+                credentials: 'include'
             });
             if (response.ok) {
                 // Refresh list after deletion

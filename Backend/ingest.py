@@ -11,7 +11,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_ollama import OllamaEmbeddings
 
-# --- 1. Configuration ---
+# --- Configuration ---
 # Define the paths for your source documents, persistent storage, and log file (Stores previously ingested filenames).
 SOURCE_DIRECTORY = "DocsToIngest"
 PERSIST_DIRECTORY = "chroma_db"
@@ -22,7 +22,7 @@ load_dotenv()
 if "OPENAI_API_KEY" not in os.environ:
     raise ValueError("OpenAI API key not found. Please set it in the .env file.")
 
-# --- 2. Helper Functions ---
+# --- Helper Functions ---
 def get_processed_files():
     try:
         with open(LOG_FILE, 'r') as f:
@@ -37,8 +37,6 @@ def update_processed_files(filename):
     with open(LOG_FILE, 'a') as f:
         f.write(filename + '\n')
 
-# --- 3. Main Ingestion Logic ---
-# ... (all your existing imports)
 
 def run_ingestion(user_id: str):
     """Programmatic entry point for the API"""

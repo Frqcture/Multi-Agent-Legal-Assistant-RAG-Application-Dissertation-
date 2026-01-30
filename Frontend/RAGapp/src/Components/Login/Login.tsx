@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Login.module.css';
 
-const BASE_URL = 'http://0.0.0.0:8000'; // Match your BackendAPI.py URL
+const BASE_URL = 'http://192.168.0.137:8000'; // Match your BackendAPI.py URL
 
 const Login: React.FC = () => {
     const [username, setUsername] = useState('');
@@ -24,6 +24,7 @@ const Login: React.FC = () => {
             const response = await fetch(`${BASE_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                credentials: 'include',
                 body: formData,
             });
 
@@ -32,10 +33,7 @@ const Login: React.FC = () => {
                 throw new Error(errorData.detail || 'Login failed');
             }
 
-            const data = await response.json();
-            
-            // Store the token and redirect to search
-            localStorage.setItem('access_token', data.access_token);
+            // Redirect user to /search on successful login
             window.location.href = '/search';
         } catch (err: any) {
             setError(err.message);

@@ -2,9 +2,14 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './Components/Login/Login';
 import Search from '././Components/Search/Search';
 import Register from './Components/Register/Register';
+import { useAuth } from './Components/useAuth';
 
 function App() {
-  const isAuthenticated = !!localStorage.getItem('access_token');
+  const isAuthenticated = useAuth();
+
+  if(isAuthenticated === null) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <Router>
