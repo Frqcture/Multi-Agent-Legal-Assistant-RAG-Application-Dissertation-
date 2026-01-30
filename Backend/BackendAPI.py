@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import Request
+from fastapi.responses import JSONResponse
 from auth_utils import verify_password, create_access_token, hash_password, ALGORITHM, SECRET_KEY
 from jose import jwt, JWTError
 from pydantic import BaseModel
@@ -26,9 +27,16 @@ app = FastAPI(title="BackendAPI")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+origins = [
+    "http://localhost:5173",  # Default React port
+    "http://127.0.0.1:5173",
+    "http://0.0.0.0:5173",
+    "http://192.168.0.137:5173"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # In production, use your specific frontend URL
+    allow_origins=origins, # In production, use your specific frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,12 +44,13 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-async def get_current_user(request: Request, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
     """Validates the JWT token and returns the user's data."""
 
     token = request.cookies.get("access_token")
 
     if not token:
+        print(f"DEBUG: Cookies received: {request.cookies}")
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
@@ -78,7 +87,8 @@ class QueryRequest(BaseModel):
     question: str
 
 @app.get("/me")
-async def get_me(current_user: User = Depends(get_current_user)):
+@limiter.limit("6/minute")
+async def get_me( request: Request, current_user: User = Depends(get_current_user)):
     """
     Returns the current user's information
     This is used to validate if the user is logged in when the site is initially loaded
@@ -100,6 +110,9 @@ async def login( response: Response, request: Request, form_data: OAuth2Password
 
     access_token = create_access_token(data={"sub": user.username})
 
+    content = {"message": "Login Successful"}
+    response = JSONResponse(content=content)
+
     response.set_cookie(
         key = "access_token",
         value = access_token,
@@ -110,8 +123,7 @@ async def login( response: Response, request: Request, form_data: OAuth2Password
         secure = False # Set this to true in production, it requires SSL Certificate
     )
 
-    return {"message" : "Login Successful"}
-
+    return response
 
 @app.post("/register")
 @limiter.limit("5/minute")

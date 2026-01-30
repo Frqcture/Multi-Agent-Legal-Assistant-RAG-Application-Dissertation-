@@ -6,7 +6,7 @@ export const useAuth = () => {
 
     const checkAuth = async () => {
       try {
-        const response = await fetch('http://0.0.0.0:8000/me', {
+        const response = await fetch('http://192.168.0.137:8000/me', {
           method: 'GET',
           credentials: 'include', // Include cookies
         });
@@ -24,8 +24,14 @@ export const useAuth = () => {
     };
 
     useEffect(() => {
-      checkAuth();
-    }, []);
+    // Don't ping /me if we are on pages that don't require auth
+    const publicPaths = ['/login', '/register'];
+    if (publicPaths.includes(window.location.pathname)) {
+        setIsAuthenticated(false);
+        return;
+    }
+    checkAuth();
+}, []);
 
     return { isAuthenticated, user, checkAuth };
 }

@@ -4,6 +4,7 @@ import styles from './Search.module.css';
 import { BiArrowToRight, BiBook, BiLibrary } from "react-icons/bi";
 import { CiLogout } from "react-icons/ci";
 import { FiX, FiTrash2 } from 'react-icons/fi';
+import { useAuth } from '../useAuth';
 
 // Define the structure of a message
 interface Message {
@@ -21,7 +22,7 @@ interface AskResponse {
 }
 
 // --- API Helpers ---
-const BASE_URL = 'http://0.0.0.0:8000';
+const BASE_URL = 'http://192.168.0.137:8000';
 
 async function logoutUser() {
     localStorage.removeItem('access_token');
@@ -76,7 +77,6 @@ async function uploadPDF(file: File): Promise<{ message: string; status: string 
             method: 'POST',
             credentials: 'include',
             body: formData, // No headers needed, browser sets boundary
-            
         });
 
         if (!response.ok) throw new Error('Upload failed');
@@ -101,12 +101,20 @@ const Search: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Security Check: Redirect if no token is found
+    // useEffect(() => {
+    //     const token = localStorage.getItem('access_token');
+    //     if (!token) {
+    //         navigate('/login'); // Kick user back to login
+    //     }
+    // }, [navigate]);
+
+    const isAuthenticated = useAuth();
+
     useEffect(() => {
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-            navigate('/login'); // Kick user back to login
-        }
-    }, [navigate]);
+    if (isAuthenticated === null || false) {
+        navigate('/login');
+    }
+}, [isAuthenticated, navigate]);
 
     const fetchFiles = async () => {
         try {
