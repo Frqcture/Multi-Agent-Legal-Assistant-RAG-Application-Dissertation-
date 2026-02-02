@@ -17,9 +17,11 @@ export const useAuth = () => {
           setIsAuthenticated(true);
         } else {
           setIsAuthenticated(false);
+          window.location.href = '/login';
         }
       } catch (error) {
         setIsAuthenticated(false);
+        window.location.href = '/login';
       }
     };
 
