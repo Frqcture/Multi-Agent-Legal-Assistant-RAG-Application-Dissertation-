@@ -3,72 +3,104 @@
     justify-content: center;
     align-items: center;
     height: 100vh;
-    background-color: #f4f7f6;
+    background-color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .registerForm {
-    background: white;
+    background: #1e1e1e;
     padding: 2.5rem;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    border-radius: 24px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
     width: 100%;
     max-width: 400px;
+    border: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+}
+
+.registerForm h2 {
+    margin-bottom: 1.5rem;
+    color: #e3e3e3;
+    text-align: center;
 }
 
 .inputGroup {
     margin-bottom: 1.5rem;
+    width: 100%; /* Ensures the group spans the full width of the form */
 }
 
 .inputGroup label {
     display: block;
     margin-bottom: 0.5rem;
-    font-weight: 600;
+    font-weight: 500;
+    color: #e3e3e3;
+    text-align: left; /* Keeps labels aligned to the left of the input */
 }
 
 .inputGroup input {
     width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #ddd;
-    border-radius: 6px;
+    box-sizing: border-box; /* Crucial: ensures padding doesn't push the input out of bounds */
+    padding: 0.85rem;
+    background-color: #2a2a2a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    color: #ffffff;
+}
+
+.inputGroup input:focus {
+    outline: none;
+    border-color: #28a745;
 }
 
 .errorText {
-    color: #e74c3c;
-    background: #fdeaea;
-    padding: 0.5rem;
-    border-radius: 4px;
+    color: #ff4d4d;
+    background: rgba(255, 77, 77, 0.1);
+    padding: 0.75rem;
+    border-radius: 8px;
     font-size: 0.9rem;
     margin-bottom: 1rem;
 }
 
 button {
     width: 100%;
-    padding: 0.75rem;
-    background: #28a745; /* Success Green */
+    padding: 0.85rem;
+    background: #28a745; /* Modern Success Green */
     color: white;
     border: none;
-    border-radius: 6px;
+    border-radius: 12px;
     cursor: pointer;
     font-size: 1rem;
-    transition: background 0.2s;
+    font-weight: 600;
+    transition: background 0.2s, transform 0.1s;
 }
 
 button:hover {
     background: #218838;
 }
 
+button:active {
+    transform: scale(0.98);
+}
+
 button:disabled {
-    background: #ccc;
+    background: #333;
+    color: #8e8e8e;
 }
 
 .loginLink {
     text-align: center;
     margin-top: 1.5rem;
     font-size: 0.9rem;
-    color: #666;
+    color: #8e8e8e; /* Muted gray matching Search placeholder */
 }
 
 .loginLink a {
-    color: #007bff;
+    color: #ffffff;
     text-decoration: none;
+    font-weight: 500;
+}
+
+.loginLink a:hover {
+    text-decoration: underline;
 }

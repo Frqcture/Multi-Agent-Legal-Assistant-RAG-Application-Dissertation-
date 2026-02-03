@@ -116,22 +116,6 @@ const Search: React.FC = () => {
     // Ref to trigger the hidden file input
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Security Check: Redirect if no token is found
-    // useEffect(() => {
-    //     const token = localStorage.getItem('access_token');
-    //     if (!token) {
-    //         navigate('/login'); // Kick user back to login
-    //     }
-    // }, [navigate]);
-
-    const isAuthenticated = useAuth();
-
-    useEffect(() => {
-    if (isAuthenticated === null || false) {
-        navigate('/login');
-    }
-}, [isAuthenticated, navigate]);
-
     const fetchFiles = async () => {
         try {
             const response = await fetch(`${BASE_URL}/files`, {

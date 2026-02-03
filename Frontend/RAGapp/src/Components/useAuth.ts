@@ -17,9 +17,13 @@ export const useAuth = () => {
           setIsAuthenticated(true);
         } else {
           setIsAuthenticated(false);
+          // Redirect to login if not authenticated
+          window.location.href = '/login';
         }
       } catch (error) {
         setIsAuthenticated(false);
+        // Redirect to login if not authenticated
+        window.location.href = '/login';
       }
     };
 
