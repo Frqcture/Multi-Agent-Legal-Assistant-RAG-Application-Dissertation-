@@ -18,6 +18,7 @@ from pypdf import PdfReader
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from typing import List
 
 Base.metadata.create_all(bind=engine)
 
@@ -187,53 +188,43 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/upload")
 @limiter.limit("5/minute")
-async def upload_file(request: Request, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    filename = os.path.basename(file.filename)
+async def upload_file(request: Request, files: List[UploadFile] = File(...), current_user: dict = Depends(get_current_user)):
+    saved_files = []
 
-    # Validate file type
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    for file in files:
+        if not file.filename.endswith(".pdf"):
+            raise HTTPException(status_code=400, detail=f"File {file.filename} is not a PDF.")
 
-    # Validate file size
-    # file.size is available in modern FastAPI/Starlette versions
-    if file.size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum allowed size is {MAX_FILE_SIZE / (1024 * 1024)}MB."
-        )
+        if file.size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail=f"File {file.filename} is too large.")
 
-    # Extract only the base name (prevents ../../ logic)
-    safe_filename = os.path.basename(file.filename)
+        safe_filename = os.path.basename(file.filename)
+        base_dir = Path(UPLOAD_DIR).resolve()
+        file_path = (base_dir / safe_filename).resolve()
 
-    # Create absolute paths for comparison
-    base_dir = Path(UPLOAD_DIR).resolve()
-    file_path = (base_dir / safe_filename).resolve()
+        if not str(file_path).startswith(str(base_dir)):
+            raise HTTPException(status_code=400, detail="Invalid filename detected.")
 
-    # Security Check: Ensure the file path is actually inside base_dir
-    if not str(file_path).startswith(str(base_dir)):
-        raise HTTPException(status_code=400, detail="Invalid filename detected.")
+        try:
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
 
-    try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+            if not is_pdf_safe(file_path):
+                os.remove(file_path)  # Clean up unsafe file
+                raise HTTPException(status_code=400, detail=f"PDF {file.filename} is not safe.")
 
-    if not(is_pdf_safe(file_path)):
-        raise HTTPException(status_code=400, detail="PDF is not safe.")
+            saved_files.append(safe_filename)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save {file.filename}: {str(e)}")
 
-    # Trigger Ingestion
+    # Trigger Ingestion once for all new files
     try:
         ingest_status = run_ingestion(user_id=current_user.id)
-
-        # Refresh the RAG Engine so it sees the new vectors
         global rag_app
         rag_app = RAGEngine()
-
-        return {"message": "File uploaded and ingested successfully", "status": ingest_status}
+        return {"message": f"{len(saved_files)} files uploaded successfully", "status": ingest_status}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
-
 
 @app.get("/files")
 async def list_files(current_user: dict = Depends(get_current_user)):

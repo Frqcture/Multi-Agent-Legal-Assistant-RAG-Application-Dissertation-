@@ -4,7 +4,6 @@ import styles from './Search.module.css';
 import { BiArrowToRight, BiBook, BiLibrary } from "react-icons/bi";
 import { CiLogout } from "react-icons/ci";
 import { FiX, FiTrash2 } from 'react-icons/fi';
-import { useAuth } from '../useAuth';
 
 // Define the structure of a message
 interface Message {
@@ -82,11 +81,15 @@ async function askQuestion(question: string): Promise<Message | void> {
 }
 
 // Function to handle the PDF upload
-async function uploadPDF(file: File): Promise<{ message: string; status: string } | null> {
+async function uploadPDFs(files: FileList): Promise<{ message: string; status: string } | null> {
 
     const url = `${BASE_URL}/upload`;
     const formData = new FormData();
-    formData.append('file', file);
+    // formData.append('file', file);
+
+    Array.from(files).forEach(file => {
+      formData.append('files', file);
+    })
 
     try {
         const response = await fetch(url, {
@@ -180,31 +183,32 @@ const Search: React.FC = () => {
     };
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
+        const files = event.target.files;
+        // if (!file) return;
+        if (!files || files.length === 0) return;
 
         setIsIngesting(true);
         
         // Add a system message to the chat
         const systemMsg: Message = {
             id: Date.now(),
-            text: `Uploading and indexing "${file.name}"...`,
+            text: `Uploading and indexing "${files.length} documents"...`,
             sender: 'bot'
         };
         setMessages(prev => [...prev, systemMsg]);
 
-        const result = await uploadPDF(file);
+        const result = await uploadPDFs(files);
 
         if (result) {
             setMessages(prev => [...prev, {
                 id: Date.now(),
-                text: `Success: ${file.name} is now in the knowledge base.`,
+                text: `Success: ${files.length} documents are now in the knowledge base.`,
                 sender: 'bot'
             }]);
         } else {
             setMessages(prev => [...prev, {
                 id: Date.now(),
-                text: `Failed to upload ${file.name}. Please try again.`,
+                text: `Failed to upload. Please try again.`,
                 sender: 'bot'
             }]);
         }
@@ -253,6 +257,7 @@ const Search: React.FC = () => {
                         ref={fileInputRef} 
                         style={{ display: 'none' }} 
                         accept=".pdf"
+                        multiple
                         onChange={handleFileChange}
                     />
 
