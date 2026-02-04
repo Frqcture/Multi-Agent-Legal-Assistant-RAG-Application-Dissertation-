@@ -85,7 +85,6 @@ async function uploadPDFs(files: FileList): Promise<{ message: string; status: s
 
     const url = `${BASE_URL}/upload`;
     const formData = new FormData();
-    // formData.append('file', file);
 
     Array.from(files).forEach(file => {
       formData.append('files', file);
@@ -184,7 +183,7 @@ const Search: React.FC = () => {
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
-        // if (!file) return;
+        
         if (!files || files.length === 0) return;
 
         setIsIngesting(true);

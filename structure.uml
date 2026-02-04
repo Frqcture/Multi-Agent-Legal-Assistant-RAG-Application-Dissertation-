@@ -1,0 +1,44 @@
+@startuml
+title RAGapp Infrastructure & Frontend↔Backend Connections
+
+package "Client" {
+  [Browser] as Browser
+  [Vite Dev Server\n(Frontend/RAGapp)] as Vite
+  component "React App\n(Login, Register, Search, useAuth)" as React
+  Browser --> Vite : loads dev bundle
+  Vite --> React
+}
+
+package "Backend (FastAPI)" {
+  [FastAPI\nBackend/BackendAPI.py] as API
+  component "RAGEngine\nBackend/index.py" as RAGEngine
+  component "Ingest Pipeline\nBackend/ingest.py" as Ingest
+  database "User DB\n(backend database.py / models.py)" as UserDB
+  folder "File Storage\nBackend/DocsToIngest/" as FileStore
+  component "Embedding Provider\n(e.g. OpenAI)" as Embeddings
+  database "Chroma Vector DB\nBackend/chroma_db/chroma.sqlite3" as Chroma
+  component "PDF Loader / OCR" as PDFLoader
+  
+  API --> RAGEngine : /query, /files, /delete
+  API --> UserDB : auth / user CRUD
+  API --> FileStore : upload / serve files
+  API --> Ingest
+  RAGEngine --> Embeddings : get embeddings
+  RAGEngine --> Chroma : persist & query vectors
+  Ingest --> FileStore : reads PDFs
+  Ingest --> PDFLoader : parse & split
+  Ingest --> Embeddings : embeddings during ingest
+  Ingest --> Chroma : write embeddings
+}
+
+React --> API : HTTP(S) REST (JSON)
+note right of React
+  - Query user input
+  - File uploads
+  - Auth (login/register)
+end note
+
+Chroma --> FileStore : stores metadata (file refs)
+UserDB --> "SQLite / SQLAlchemy" : backend storage
+
+@enduml
