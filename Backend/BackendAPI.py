@@ -1,255 +1,257 @@
 import os
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status, Response
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi import Request
-from fastapi.responses import JSONResponse
-from auth_utils import verify_password, create_access_token, hash_password, ALGORITHM, SECRET_KEY
-from jose import jwt, JWTError
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
-from index import RAGEngine
-from ingest import run_ingestion
-import shutil
-from sqlalchemy.orm import Session
 from pathlib import Path
-from database import engine, Base, get_db
-from models import User
+from typing import List
+import logging
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request, Response
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 from pypdf import PdfReader
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from typing import List
+import shutil
 
+from auth_utils import verifyPassword, createAccessToken, hashPassword, ALGORITHM, SECRET_KEY
+from jose import jwt, JWTError
+from database import engine, Base, getDb
+from models import User
+from index import RAGEngine
+from ingest import runIngestion
+
+# Setup
 Base.metadata.create_all(bind=engine)
 
 MAX_FILE_SIZE = 15 * 1024 * 1024
-limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="BackendAPI")
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+UPLOAD_DIR = "DocsToIngest"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-origins = [
-    "http://localhost:5173",  # Default React port
+# CORS origins
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://0.0.0.0:5173",
     "http://192.168.0.137:5173"
 ]
 
+# FastAPI setup
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(title="BackendAPI")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins, # In production, use your specific frontend URL
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2Scheme = OAuth2PasswordBearer(tokenUrl="login")
+ragApp = RAGEngine()
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Validates the JWT token and returns the user's data."""
 
+class QueryRequest(BaseModel):
+    question: str
+
+
+async def getCurrentUser(request: Request, db: Session = Depends(getDb)):
+    """Extract and validate JWT token from cookies."""
     token = request.cookies.get("access_token")
-
     if not token:
-        print(f"DEBUG: Cookies received: {request.cookies}")
+        print("No token")
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None: raise HTTPException(status_code=401)
+        username = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401)
 
         user = db.query(User).filter(User.username == username).first()
-        if user is None: raise HTTPException(status_code=401)
+        if user is None:
+            raise HTTPException(status_code=401)
         return user
 
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-def is_pdf_safe(file_path):
-    #TODO - Add functionality to see if the PDF is a "ZIP Bomb" by creating a seperate instance with limited resources.
 
+def isPdfSafe(filePath: str) -> tuple:
+    """Validate PDF structure and safety."""
     try:
-        reader = PdfReader(file_path)
-        # Attempt to access the number of pages to trigger basic parsing
-        _ = len(reader.pages)
-        # Check for encrypted files which can break ingestion
+        reader = PdfReader(filePath)
+        _ = len(reader.pages)  # Verify pages are readable
         if reader.is_encrypted:
-            return False, "Encrypted PDFs are not supported."
+            return False, "Encrypted PDFs not supported"
         return True, "Safe"
     except Exception:
-        return False, "Malformed or corrupted PDF structure."
+        return False, "Malformed or corrupted PDF"
 
-# Start the engine
-rag_app = RAGEngine()
-
-# Define exactly what the user should send
-class QueryRequest(BaseModel):
-    question: str
 
 @app.get("/me")
 @limiter.limit("6/minute")
-async def get_me( request: Request, current_user: User = Depends(get_current_user)):
-    """
-    Returns the current user's information
-    This is used to validate if the user is logged in when the site is initially loaded
-    """
-
+async def getMe(request: Request, currentUser: User = Depends(getCurrentUser)):
+    """Return authenticated user info."""
     return {
-        "id": current_user.id,
-        "username": current_user.username,
+        "id": currentUser.id,
+        "username": currentUser.username,
         "message": "Authenticated"
     }
 
+
 @app.post("/login")
 @limiter.limit("5/minute")
-async def login( response: Response, request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(getDb)):
+    """Authenticate user and set JWT cookie."""
     user = db.query(User).filter(User.username == form_data.username).first()
 
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    if not user or not verifyPassword(form_data.password, user.hashedPassword):
+        raise HTTPException(status_code=400, detail="Incorrect credentials")
 
-    access_token = create_access_token(data={"sub": user.username})
+    accessToken = createAccessToken(data={"sub": user.username})
 
-    content = {"message": "Login Successful"}
-    response = JSONResponse(content=content)
-
+    response = JSONResponse(content={"message": "Login Successful"})
     response.set_cookie(
-        key = "access_token",
-        value = access_token,
-        httponly = True,
-        max_age = 60 * 60 * 24,
-        expires = 60 * 60 * 24,
-        samesite = "lax",
-        secure = False # Set this to true in production, it requires SSL Certificate
+        key="access_token",
+        value=accessToken,
+        httponly=True,
+        max_age=60 * 60 * 24,
+        samesite="lax",
+        secure=False,
+        path="/"
     )
-
     return response
+
 
 @app.post("/logout")
 @limiter.limit("5/minute")
-async def logout(response: Response, request: Request):
-    """Clears the session cookies related to the current user"""
-
-    content = {"message": "Logout Successful"}
-    response = JSONResponse(content=content)
-
+async def logout(request: Request):
+    """Clear JWT cookie."""
+    response = JSONResponse(content={"message": "Logout Successful"})
     response.delete_cookie(
         key="access_token",
         httponly=True,
         samesite="lax",
-        secure=False,  # Set to True in production with HTTPS
-        path="/"  # Must match the path used when the cookie was set
+        secure=False,
+        path="/"
     )
-
     return response
+
 
 @app.post("/register")
 @limiter.limit("5/minute")
-async def register(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # Check if user exists
-    existing_user = db.query(User).filter(User.username == form_data.username).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Username already registered")
+async def register(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(getDb)):
+    """Register new user."""
+    if db.query(User).filter(User.username == form_data.username).first():
+        raise HTTPException(status_code=400, detail="Username already exists")
 
-    # Create new user with hashed password
-    new_user = User(
+    newUser = User(
         username=form_data.username,
-        hashed_password=hash_password(form_data.password)  # From your auth_utils
+        hashedPassword=hashPassword(form_data.password)
     )
-    db.add(new_user)
+    db.add(newUser)
     db.commit()
-    db.refresh(new_user)
+    db.refresh(newUser)
     return {"message": "User created successfully"}
+
 
 @app.post("/ask")
 @limiter.limit("20/minute")
-async def ask_question(request: Request, query_request: QueryRequest, current_user: dict = Depends(get_current_user)):
-    """
-    Takes a question, searches the PDF, and returns an answer.
-    """
+async def askQuestion(request: Request, queryRequest: QueryRequest, currentUser: User = Depends(getCurrentUser)):
+    """Query knowledge base with context filtering by user."""
     try:
-        # We access the question via request.question thanks to Pydantic
-        answer = rag_app.query(query_request.question, user_id=current_user.id)
+        answer = ragApp.query(queryRequest.question, userId=currentUser.id)
         return {"answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/refresh")
 @limiter.limit("5/minute")
 async def refresh(request: Request):
-    """Reloads the vector store if the PDF has changed."""
-    global rag_app
-    rag_app = RAGEngine()
-    return {"message": "Success: Knowledge base updated."}
+    """Reload RAG engine."""
+    global ragApp
+    ragApp = RAGEngine()
+    return {"message": "Knowledge base updated"}
 
-UPLOAD_DIR = "DocsToIngest"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/upload")
 @limiter.limit("5/minute")
-async def upload_file(request: Request, files: List[UploadFile] = File(...), current_user: dict = Depends(get_current_user)):
-    saved_files = []
+async def uploadFile(request: Request, files: List[UploadFile] = File(...), currentUser: User = Depends(getCurrentUser)):
+    """Upload and ingest documents."""
+    savedFiles = []
+    fileStatuses = []
 
     for file in files:
         if not file.filename.endswith(".pdf"):
-            raise HTTPException(status_code=400, detail=f"File {file.filename} is not a PDF.")
+            raise HTTPException(status_code=400, detail=f"{file.filename} is not a PDF")
 
         if file.size > MAX_FILE_SIZE:
-            raise HTTPException(status_code=413, detail=f"File {file.filename} is too large.")
+            raise HTTPException(status_code=413, detail=f"{file.filename} is too large")
 
-        safe_filename = os.path.basename(file.filename)
-        base_dir = Path(UPLOAD_DIR).resolve()
-        file_path = (base_dir / safe_filename).resolve()
+        safeFilename = os.path.basename(file.filename)
+        baseDir = Path(UPLOAD_DIR).resolve()
+        filePath = (baseDir / safeFilename).resolve()
 
-        if not str(file_path).startswith(str(base_dir)):
-            raise HTTPException(status_code=400, detail="Invalid filename detected.")
+        if not str(filePath).startswith(str(baseDir)):
+            raise HTTPException(status_code=400, detail="Invalid filename")
 
         try:
-            with open(file_path, "wb") as buffer:
+            with open(filePath, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
 
-            if not is_pdf_safe(file_path):
-                os.remove(file_path)  # Clean up unsafe file
-                raise HTTPException(status_code=400, detail=f"PDF {file.filename} is not safe.")
+            isSafe, statusMsg = isPdfSafe(str(filePath))
+            if not isSafe:
+                os.remove(filePath)
+                raise HTTPException(status_code=400, detail=f"PDF validation failed: {statusMsg}")
 
-            saved_files.append(safe_filename)
+            savedFiles.append(safeFilename)
+            fileStatuses.append({"filename": safeFilename, "status": statusMsg})
+
+        except HTTPException:
+            raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to save {file.filename}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to save {file.filename}")
 
-    # Trigger Ingestion once for all new files
+    # Ingest all files
     try:
-        ingest_status = run_ingestion(user_id=current_user.id)
-        global rag_app
-        rag_app = RAGEngine()
-        return {"message": f"{len(saved_files)} files uploaded successfully", "status": ingest_status}
+        ingestStatus = runIngestion(userId=currentUser.id)
+        global ragApp
+        ragApp = RAGEngine()
+        return {
+            "message": f"{len(savedFiles)} files uploaded",
+            "ingestionStatus": ingestStatus,
+            "files": fileStatuses
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
+
 @app.get("/files")
-async def list_files(current_user: dict = Depends(get_current_user)):
-    """Returns a list of all files the current user has uploaded."""
+async def listFiles(currentUser: User = Depends(getCurrentUser)):
+    """List user's uploaded files."""
     try:
-        files = rag_app.list_user_files(user_id=current_user.id)
+        files = ragApp.listUserFiles(userId=currentUser.id)
         return {"files": files}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.delete("/files/{filename}")
-async def delete_file(filename: str, current_user: dict = Depends(get_current_user)):
-    """Removes a specific file from the vector store and the ingestion log."""
+async def deleteFile(filename: str, currentUser: User = Depends(getCurrentUser)):
+    """Delete file from vectorstore and local storage."""
     try:
-        # Remove from ChromaDB
-        deleted = rag_app.delete_file(user_id=current_user.id, filename=filename)
-
+        deleted = ragApp.deleteFile(userId=currentUser.id, filename=filename)
         if not deleted:
-            raise HTTPException(status_code=404, detail="File not found in vector store.")
+            raise HTTPException(status_code=404, detail="File not found")
 
-        # This allows the user to re-upload the same filename later
+        # Remove from log
         from ingest import LOG_FILE
-
-        # Remove from IngestedFiles.log
         if os.path.exists(LOG_FILE):
             with open(LOG_FILE, "r") as f:
                 lines = f.readlines()
@@ -258,12 +260,12 @@ async def delete_file(filename: str, current_user: dict = Depends(get_current_us
                     if line.strip() != filename:
                         f.write(line)
 
-        # Remove from local storage
-        file_path = os.path.join(UPLOAD_DIR, filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        # Remove from disk
+        filePath = os.path.join(UPLOAD_DIR, filename)
+        if os.path.exists(filePath):
+            os.remove(filePath)
 
-        return {"message": f"Successfully deleted {filename}"}
+        return {"message": f"Deleted {filename}"}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

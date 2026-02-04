@@ -1,140 +1,104 @@
 import os
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_ollama import ChatOllama,OllamaEmbeddings
-from sympy.multipledispatch.dispatcher import source
+from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 
 class RAGEngine:
-    def __init__(self, persist_directory="chroma_db", pdf_path="testPDFinput.pdf"):
+    def __init__(self, persistDirectory: str = "chroma_db", pdfPath: str = "testPDFinput.pdf"):
         load_dotenv()
-        self.persist_directory = persist_directory
-        self.pdf_path = pdf_path
-
-        # 1. Initialize Models (Done once)
-        # self.embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
-        self.embedding_model = OllamaEmbeddings(model="embeddinggemma")
-
-        # This is where we would query OpenAI for a response
-        #self.llm = ChatOpenAI(model_name="gpt-5-mini", temperature=0)
-
-        #This is the method to run the model locally
+        self.persistDirectory = persistDirectory
+        self.pdfPath = pdfPath
+        self.embeddingModel = OllamaEmbeddings(model="embeddinggemma")
         self.llm = ChatOllama(model="gemma3:4b", temperature=0)
+        self.vectorstore = self._setupVectorstore()
 
-        # 2. Load/Create Vectorstore (Done once)
-        self.vectorstore = self._setup_vectorstore()
-
-        # 3. Set up the Chain (Done once)
-        # self.rag_chain = self._setup_chain()
-
-    def _setup_vectorstore(self):
-        if os.path.exists(self.persist_directory):
+    def _setupVectorstore(self):
+        """Load existing vectorstore or create new one from PDF."""
+        if os.path.exists(self.persistDirectory):
             return Chroma(
-                persist_directory=self.persist_directory,
-                embedding_function=self.embedding_model
-            )
-        else:
-            loader = PyPDFLoader(self.pdf_path)
-            docs = loader.load()
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-            splits = text_splitter.split_documents(docs)
-            return Chroma.from_documents(
-                documents=splits,
-                embedding=self.embedding_model,
-                persist_directory=self.persist_directory
+                persist_directory=self.persistDirectory,
+                embedding_function=self.embeddingModel
             )
 
-    def format_chroma_docs(self, docs):
-        """Formats Chroma docs into a single string with metadata headers"""
-        formatted_chunks = []
-
-        for doc in docs:
-            # Get Metadata directly from chromaDB results
-            source_name = doc.metadata.get("document_name", "Unknown Source")
-            page_number = doc.metadata.get("page_number", "Unknown Page")
-
-            #Create a clearly marked header, so that the LLM can clearly understand it
-            header = f"--- SOURCE: [{source_name}, Page {page_number}] ---"
-            content = f"{header}\n{doc.page_content}"
-            formatted_chunks.append(content)
-
-        return "\n\n".join(formatted_chunks)
-
-    def query(self, question: str, user_id: str):  # Accept user_id
-        """Gets the context and queries the LLM with the given question and this context"""
-        # Create a filtered retriever for this specific query
-        # This prevents User A from ever 'seeing' User B's documents
-        retriever = self.vectorstore.as_retriever(
-            search_kwargs={'filter': {'user_id': user_id}}
+        loader = PyPDFLoader(self.pdfPath)
+        docs = loader.load()
+        textSplitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        splits = textSplitter.split_documents(docs)
+        return Chroma.from_documents(
+            documents=splits,
+            embedding=self.embeddingModel,
+            persist_directory=self.persistDirectory
         )
 
-        # template = """
-        # You are a helpful assistant. Answer the question based only on the following context. You should give references in the format [document_name, page_number] for every bit of information that you use.
-        # Context: {context}
-        # Question: {question}
-        # """
+    def formatChromaDocs(self, docs):
+        """Format documents with source headers for LLM context."""
+        formattedChunks = []
+        for doc in docs:
+            sourceName = doc.metadata.get("document_name", "Unknown Source")
+            pageNumber = doc.metadata.get("page_number", "Unknown Page")
+            header = f"--- SOURCE: [{sourceName}, Page {pageNumber}] ---"
+            formattedChunks.append(f"{header}\n{doc.page_content}")
+        return "\n\n".join(formattedChunks)
 
-        template = """
-        You are a helpful assistant that answers questions strictly using the provided context. 
+    def query(self, question: str, userId: str):
+        """Query RAG engine with user isolation via metadata filtering."""
+        retriever = self.vectorstore.as_retriever(
+            search_kwargs={'filter': {'user_id': userId}}
+        )
 
-        RULES:
-        1. Every claim you make must be followed by a reference in the format: [document_name, page_number].
-        2. If the context doesn't contain the answer, say you don't know.
-        3. The source information is provided at the start of each context block as 'SOURCE: [name, page]'.
+        template = """You are a helpful assistant that answers questions strictly using provided context.
 
-        Example:
-        Context: 
-        --- SOURCE: [Manual.pdf, 12] ---
-        The battery lasts for 10 hours.
-        Question: How long is the battery life?
-        Answer: The battery lasts for 10 hours [Manual.pdf, 12].
+RULES:
+1. Every claim must be followed by a reference: [document_name, page_number].
+2. If context doesn't answer the question, say you don't know.
+3. Source info appears at the start of each context block as 'SOURCE: [name, page]'.
 
-        Context: {context}
-        Question: {question}
-        Answer:
-        """
+Example:
+Context: 
+--- SOURCE: [Manual.pdf, 12] ---
+The battery lasts for 10 hours.
+Question: How long is the battery life?
+Answer: The battery lasts for 10 hours [Manual.pdf, 12].
+
+Context: {context}
+Question: {question}
+Answer:
+"""
 
         prompt = ChatPromptTemplate.from_template(template)
-
-        # Build and invoke the chain
         chain = (
-                {"context": retriever | RunnableLambda(self.format_chroma_docs),
-                 "question": RunnablePassthrough()}
-                | prompt
-                | self.llm
-                | StrOutputParser()
+            {
+                "context": retriever | RunnableLambda(self.formatChromaDocs),
+                "question": RunnablePassthrough()
+            }
+            | prompt
+            | self.llm
+            | StrOutputParser()
         )
-
-        # print(chain.context)
 
         return chain.invoke(question)
 
-    def list_user_files(self, user_id: str):
-        """Retrieves a unique list of filenames uploaded by the user"""
-        # Get all documents belonging to the user
+    def listUserFiles(self, userId: str):
+        """Get unique filenames uploaded by user."""
         results = self.vectorstore.get(
-            where = {"user_id": user_id},
-            include = ["metadatas"]
+            where={"user_id": userId},
+            include=["metadatas"]
         )
-
-        # Extract all unique document names from metadata.
         filenames = {meta["document_name"] for meta in results["metadatas"] if "document_name" in meta}
         return list(filenames)
 
-    def delete_file(self, user_id: str, filename: str):
-        """Deletes all chunks associated with a given user and filename"""
-
-        # Find the ID's of al chunks matching both user_id and filename
+    def deleteFile(self, userId: str, filename: str):
+        """Delete all chunks for a user's file."""
         results = self.vectorstore.get(
             where={
                 "$and": [
-                    {"user_id": user_id},
+                    {"user_id": userId},
                     {"document_name": filename}
                 ]
             }
@@ -144,3 +108,4 @@ class RAGEngine:
             self.vectorstore.delete(ids=results["ids"])
             return True
         return False
+
