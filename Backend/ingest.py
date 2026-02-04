@@ -1,15 +1,18 @@
 import os
+import logging
 from dotenv import load_dotenv
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
 
 # Import LangChain components
-from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_ollama import OllamaEmbeddings
+from langchain_community.document_loaders.parsers import RapidOCRBlobParser
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 # Define the paths for your source documents, persistent storage, and log file (Stores previously ingested filenames).
@@ -19,8 +22,6 @@ LOG_FILE = "IngestedFiles.log"
 
 # Load environment variables (for OpenAI API key)
 load_dotenv()
-if "OPENAI_API_KEY" not in os.environ:
-    raise ValueError("OpenAI API key not found. Please set it in the .env file.")
 
 # --- Helper Functions ---
 def get_processed_files():
@@ -39,9 +40,13 @@ def update_processed_files(filename):
 
 
 def run_ingestion(user_id: str):
-    """Programmatic entry point for the API"""
+    """
+    Programmatic entry point for the API.
+    Uses PyPDFLoader with RapidOCRBlobParser for robust handling of:
+    - Text-based PDFs (fast extraction)
+    - Scanned/image-based PDFs (OCR with RapidOCR)
+    """
     # Initialize components
-    # embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
     embedding_model = OllamaEmbeddings(model="embeddinggemma")
 
     # Ensure directories exist
@@ -61,25 +66,54 @@ def run_ingestion(user_id: str):
     if not new_files:
         return "No new documents found."
 
+    ingested_count = 0
+    failed_files = []
+
     for filename in new_files:
-        # file_path = os.path.join(SOURCE_DIRECTORY, filename)
         safe_filename = os.path.basename(filename)
         file_path = os.path.join(SOURCE_DIRECTORY, safe_filename)
-        loader = PyPDFLoader(file_path)
-        docs = loader.load()
 
-        # CRITICAL: Attach the user_id to the metadata of every single chunk
-        # THIS DISS-ALLOWS USERS SEEING EACH OTHERS DATA
-        for doc in docs:
-            doc.metadata["user_id"] = user_id
-            doc.metadata["document_name"] = filename
-            doc.metadata["page_number"] = doc.metadata.get("page", 0) + 1
+        try:
+            logger.info(f"Processing document: {filename}")
 
-        # If I split after attaching metadata, then metadata will automatically propogate to each chunk.
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-        splits = text_splitter.split_documents(docs)
+            # PyPDFLoader with RapidOCRBlobParser handles both:
+            # 1. Text-based PDFs: Extracts text directly
+            # 2. Scanned PDFs: Uses OCR on embedded images/pages
+            loader = PyPDFLoader(
+                file_path,
+                mode="page",
+                images_inner_format="markdown-img",
+                images_parser=RapidOCRBlobParser(),  # Local OCR - no external service needed
+            )
 
-        vectorstore.add_documents(documents=splits)
-        update_processed_files(filename)
+            docs = loader.load()
+            logger.info(f"Loaded {len(docs)} pages from {filename}")
 
-    return f"Successfully ingested {len(new_files)} files."
+            # CRITICAL: Attach the user_id to the metadata of every single chunk
+            # THIS DISALLOWS USERS SEEING EACH OTHERS DATA
+            for doc in docs:
+                doc.metadata["user_id"] = user_id
+                doc.metadata["document_name"] = filename
+                doc.metadata["page_number"] = doc.metadata.get("page", 0) + 1
+
+            # Split documents into chunks for better retrieval
+            # Metadata automatically propagates to each chunk
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+            splits = text_splitter.split_documents(docs)
+
+            vectorstore.add_documents(documents=splits)
+            update_processed_files(filename)
+
+            logger.info(f"Successfully ingested {filename}: {len(splits)} chunks")
+            ingested_count += 1
+
+        except Exception as e:
+            logger.error(f"Error processing {filename}: {str(e)}")
+            failed_files.append((filename, str(e)))
+
+    # Return detailed status
+    if failed_files:
+        error_msg = "; ".join([f"{f[0]} ({f[1]})" for f in failed_files])
+        return f"Ingested {ingested_count} files. Failed: {error_msg}"
+
+    return f"Successfully ingested {ingested_count} files."
