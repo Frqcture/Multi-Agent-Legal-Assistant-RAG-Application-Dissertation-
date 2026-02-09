@@ -62,6 +62,69 @@ A small RAG (Retrieval-Augmented Generation) demo that combines:
 - **CORS**: Configure as needed in [Backend/BackendAPI.py](Backend/BackendAPI.py)
 - **PDF safety**: The `is_pdf_safe()` function validates uploads (see [Backend/BackendAPI.py](Backend/BackendAPI.py))
 
+## Multi-Agent Workflow (MCP)
+
+This project includes a **Model Context Protocol (MCP)** based multi-agent system for complex queries.
+
+### Architecture
+
+```
+User Query → Planner Agent → Retriever Agent → Responder Agent → Final Answer
+                   ↓              ↓                  ↓
+              [MCP Server] ← JSON-RPC (stdio) → [RAG Tools]
+```
+
+### Components
+
+| File | Description |
+|------|-------------|
+| `Backend/mcp_server.py` | MCP server process exposing RAG tools |
+| `Backend/mcp_tools.py` | Tool definitions (search, list, answer) |
+| `Backend/agents.py` | Agent coordinator with planner/retriever/responder |
+
+### Running the Multi-Agent System
+
+The MCP server is **automatically spawned** by the agent coordinator when you trigger a workflow. You only need to run the FastAPI backend and frontend.
+
+**Terminal 1 — FastAPI Backend:**
+```bash
+cd Backend
+uvicorn BackendAPI:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Terminal 2 — Frontend:**
+```bash
+cd Frontend/RAGapp
+npm run dev
+```
+
+**Optional — Test MCP Server:**
+```bash
+cd Backend
+python3 mcp_server.py --test
+```
+
+### Using Multi-Agent Mode
+
+1. Login to the app
+2. Click **"Agent Mode"** button in the navbar (turns blue when active)
+3. Type your question in the search box
+4. Click **"Run Multi-Agent"** button
+5. Watch the agent steps appear in real-time:
+   - **Planner**: Analyzes query and creates plan
+   - **Retriever**: Searches documents via MCP tools
+   - **Responder**: Generates final cited answer
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/workflow/start` | POST | Start async workflow, returns `workflow_id` |
+| `/workflow/status/{id}` | GET | Poll for status and agent steps |
+| `/workflow/list` | GET | List recent workflows for user |
+
+See [Backend/BACKEND_DOCUMENTATION.md](Backend/BACKEND_DOCUMENTATION.md) for full API docs.
+
 ## Development Notes
 
 - User-scoped operations (file listing, deletion) are handled by `RAGEngine` methods in [Backend/index.py](Backend/index.py)
