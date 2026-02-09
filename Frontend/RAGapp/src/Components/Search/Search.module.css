@@ -41,6 +41,14 @@
     line-height: 1.2;
 }
 
+.subtitle {
+    font-size: 0.95rem;
+    color: #8e8e8e;
+    margin-top: 0.75rem;
+    letter-spacing: 0.5px;
+    font-weight: 300;
+}
+
 
 /* Search Box Section */
 .searchContainer {

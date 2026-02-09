@@ -1,44 +1,207 @@
 @startuml
-title RAGapp Infrastructure & Frontend↔Backend Connections
+' structure.uml - high-detail component and interaction map
 
-package "Client" {
-  [Browser] as Browser
-  [Vite Dev Server\n(Frontend/RAGapp)] as Vite
-  component "React App\n(Login, Register, Search, useAuth)" as React
-  Browser --> Vite : loads dev bundle
-  Vite --> React
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam defaultFontName Courier
+skinparam defaultFontSize 12
+
+package "Frontend (React/Vite)" {
+  [main.tsx] as FE_Main
+  [App.tsx] as FE_App
+  [useAuth.ts] as FE_UseAuth
+  [Login.tsx] as FE_Login
+  [Register.tsx] as FE_Register
+  [Search.tsx] as FE_Search
+  [App.css / index.css / *.module.css] as FE_CSS
+
+  FE_Main --> FE_App : render
+  FE_App --> FE_UseAuth : auth gate
+  FE_App --> FE_Login : route /login
+  FE_App --> FE_Register : route /register
+  FE_App --> FE_Search : route /search
+
+  FE_Login --> FE_CSS : styles
+  FE_Register --> FE_CSS : styles
+  FE_Search --> FE_CSS : styles
 }
 
 package "Backend (FastAPI)" {
-  [FastAPI\nBackend/BackendAPI.py] as API
-  component "RAGEngine\nBackend/index.py" as RAGEngine
-  component "Ingest Pipeline\nBackend/ingest.py" as Ingest
-  database "User DB\n(backend database.py / models.py)" as UserDB
-  folder "File Storage\nBackend/DocsToIngest/" as FileStore
-  component "Embedding Provider\n(e.g. OpenAI)" as Embeddings
-  database "Chroma Vector DB\nBackend/chroma_db/chroma.sqlite3" as Chroma
-  component "PDF Loader / OCR" as PDFLoader
-  
-  API --> RAGEngine : /query, /files, /delete
-  API --> UserDB : auth / user CRUD
-  API --> FileStore : upload / serve files
-  API --> Ingest
-  RAGEngine --> Embeddings : get embeddings
-  RAGEngine --> Chroma : persist & query vectors
-  Ingest --> FileStore : reads PDFs
-  Ingest --> PDFLoader : parse & split
-  Ingest --> Embeddings : embeddings during ingest
-  Ingest --> Chroma : write embeddings
+  [BackendAPI.py] as BE_API
+  [auth_utils.py] as BE_Auth
+  [database.py] as BE_DB
+  [models.py] as BE_Models
+  [index.py (RAGEngine)] as BE_RAG
+  [ingest.py] as BE_Ingest
+  [ocr_processor.py] as BE_OCR
+
+  BE_API --> BE_Auth : hash/verify + JWT
+  BE_API --> BE_DB : getDb session
+  BE_API --> BE_Models : User model
+  BE_API --> BE_RAG : query/list/delete
+  BE_API --> BE_Ingest : runIngestion()
+  BE_Ingest --> BE_OCR : OCR utilities
+  BE_Ingest --> BE_RAG : uses Chroma schema
 }
 
-React --> API : HTTP(S) REST (JSON)
-note right of React
-  - Query user input
-  - File uploads
-  - Auth (login/register)
+package "Storage / Filesystem" {
+  [users.db] as STORE_SQLITE
+  [DocsToIngest/] as STORE_UPLOADS
+  [IngestedFiles.log] as STORE_LOG
+  [chroma_db/] as STORE_CHROMA
+}
+
+package "External / Libraries" {
+  [Ollama LLM (gemma3:4b)] as EXT_LLM
+  [Ollama Embeddings (embeddinggemma)] as EXT_EMB
+  [Chroma Vectorstore] as EXT_CHROMA
+  [LangChain] as EXT_LANGCHAIN
+  [PyPDF / PDF2Image / Tesseract / RapidOCR] as EXT_OCR
+  [FastAPI / SlowAPI / SQLAlchemy] as EXT_API
+}
+
+' --- Frontend -> Backend API calls ---
+FE_UseAuth --> BE_API : GET /me (cookie auth)
+FE_Login --> BE_API : POST /login (form-urlencoded)
+FE_Register --> BE_API : POST /register (form-urlencoded)
+FE_Search --> BE_API : POST /ask (JSON)
+FE_Search --> BE_API : POST /upload (multipart)
+FE_Search --> BE_API : GET /files
+FE_Search --> BE_API : DELETE /files/{filename}
+FE_Search --> BE_API : POST /logout
+
+' --- Backend endpoints and internal flow ---
+BE_API --> BE_Auth : createAccessToken()
+BE_API --> BE_Auth : verifyPassword()
+BE_API --> BE_DB : SessionLocal
+BE_DB --> STORE_SQLITE : SQLite users table
+BE_Models --> STORE_SQLITE : schema (users)
+
+BE_API --> STORE_UPLOADS : save uploads
+BE_API --> STORE_LOG : update on delete
+BE_API --> STORE_CHROMA : refresh RAGEngine
+
+BE_RAG --> EXT_EMB : embeddings
+BE_RAG --> EXT_LLM : generation
+BE_RAG --> EXT_CHROMA : vectorstore
+BE_RAG --> EXT_LANGCHAIN : prompts, splitters
+BE_RAG --> STORE_CHROMA : persisted vectors
+
+BE_Ingest --> EXT_EMB : embeddings
+BE_Ingest --> EXT_LANGCHAIN : loaders + splitters
+BE_Ingest --> EXT_CHROMA : add_documents
+BE_Ingest --> EXT_OCR : OCR fallbacks
+BE_Ingest --> STORE_UPLOADS : read documents
+BE_Ingest --> STORE_LOG : track processed
+BE_Ingest --> STORE_CHROMA : persist chunks
+
+BE_API --> EXT_API : FastAPI + SlowAPI
+
+' --- Detailed Endpoint Responsibilities ---
+component "GET /me" as EP_ME
+component "POST /login" as EP_LOGIN
+component "POST /logout" as EP_LOGOUT
+component "POST /register" as EP_REGISTER
+component "POST /ask" as EP_ASK
+component "POST /refresh" as EP_REFRESH
+component "POST /upload" as EP_UPLOAD
+component "GET /files" as EP_FILES
+component "DELETE /files/{filename}" as EP_DELETE
+
+BE_API --> EP_ME
+BE_API --> EP_LOGIN
+BE_API --> EP_LOGOUT
+BE_API --> EP_REGISTER
+BE_API --> EP_ASK
+BE_API --> EP_REFRESH
+BE_API --> EP_UPLOAD
+BE_API --> EP_FILES
+BE_API --> EP_DELETE
+
+EP_ME --> BE_Auth : decode JWT from cookie
+EP_ME --> BE_DB : lookup User
+
+EP_LOGIN --> BE_DB : lookup User
+EP_LOGIN --> BE_Auth : verifyPassword
+EP_LOGIN --> BE_Auth : createAccessToken
+
+EP_LOGOUT --> BE_API : delete auth cookie
+
+EP_REGISTER --> BE_DB : create User
+EP_REGISTER --> BE_Auth : hashPassword
+
+EP_ASK --> BE_RAG : query(question, userId)
+
+EP_REFRESH --> BE_RAG : new RAGEngine()
+
+EP_UPLOAD --> STORE_UPLOADS : save files
+EP_UPLOAD --> BE_Ingest : runIngestion(userId)
+EP_UPLOAD --> BE_RAG : new RAGEngine()
+
+EP_FILES --> BE_RAG : listUserFiles(userId)
+EP_DELETE --> BE_RAG : deleteFile(userId, filename)
+EP_DELETE --> STORE_LOG : remove filename
+EP_DELETE --> STORE_UPLOADS : remove file
+
+' --- RAGEngine Internal Flow ---
+component "RAGEngine.query" as RAG_QUERY
+component "RAGEngine.listUserFiles" as RAG_LIST
+component "RAGEngine.deleteFile" as RAG_DELETE
+
+BE_RAG --> RAG_QUERY
+BE_RAG --> RAG_LIST
+BE_RAG --> RAG_DELETE
+
+RAG_QUERY --> EXT_CHROMA : retriever (filter user_id)
+RAG_QUERY --> EXT_LANGCHAIN : prompt + chain
+RAG_QUERY --> EXT_LLM : generate answer
+
+RAG_LIST --> EXT_CHROMA : get metadatas
+RAG_DELETE --> EXT_CHROMA : delete ids
+
+' --- Ingestion Pipeline Detailed Steps ---
+component "runIngestion" as INGEST_RUN
+component "processPdf" as INGEST_PDF
+component "extractDocx" as INGEST_DOCX
+component "extractPptx" as INGEST_PPTX
+component "extractTxt" as INGEST_TXT
+component "extractImage" as INGEST_IMG
+component "loadPdfWithTimeout" as INGEST_PDF_TIMEOUT
+component "extractPdfWithOcr" as INGEST_PDF_OCR
+
+BE_Ingest --> INGEST_RUN
+INGEST_RUN --> INGEST_PDF
+INGEST_RUN --> INGEST_DOCX
+INGEST_RUN --> INGEST_PPTX
+INGEST_RUN --> INGEST_TXT
+INGEST_RUN --> INGEST_IMG
+
+INGEST_PDF --> INGEST_PDF_TIMEOUT : RapidOCR loader
+INGEST_PDF --> INGEST_PDF_TIMEOUT : basic loader
+INGEST_PDF --> INGEST_PDF_OCR : image OCR fallback
+
+INGEST_RUN --> EXT_LANGCHAIN : split docs
+INGEST_RUN --> EXT_CHROMA : add_documents
+
+' --- Auth Utilities ---
+component "hashPassword" as AUTH_HASH
+component "verifyPassword" as AUTH_VERIFY
+component "createAccessToken" as AUTH_TOKEN
+
+BE_Auth --> AUTH_HASH
+BE_Auth --> AUTH_VERIFY
+BE_Auth --> AUTH_TOKEN
+
+' --- User Model ---
+component "User" as MODEL_USER
+note right of MODEL_USER
+  id: int
+  username: str
+  hashedPassword: str
 end note
 
-Chroma --> FileStore : stores metadata (file refs)
-UserDB --> "SQLite / SQLAlchemy" : backend storage
+BE_Models --> MODEL_USER
+MODEL_USER --> STORE_SQLITE
 
 @enduml

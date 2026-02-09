@@ -4,11 +4,14 @@ export const useAuth = () => {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
     const [user, setUser] = useState<any>(null);
 
+    // const BASE_URL = import.meta.env.BASE_URL;
+    const BASE_URL = "http://192.168.0.193:8000"; // Match your BackendAPI.py URL
+
     const checkAuth = async () => {
       try {
-        const response = await fetch('http://192.168.0.137:8000/me', {
+        const response = await fetch(`${BASE_URL}/me`, {
           method: 'GET',
-          credentials: 'include', // Include cookies
+          credentials: 'include', // Include cookies 
         });
 
         if (response.ok) {

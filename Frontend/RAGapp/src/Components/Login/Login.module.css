@@ -19,10 +19,23 @@
     flex-direction: column;
 }
 
-.loginForm h2 {
-    color: #e3e3e3; /* Off-white for better contrast */
-    margin-bottom: 1.5rem;
+.headerSection {
+    margin-bottom: 2rem;
     text-align: center;
+}
+
+.mainTitle {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #e3e3e3;
+    margin: 0 0 0.5rem 0;
+}
+
+.tagline {
+    font-size: 0.85rem;
+    color: #a8a8a8;
+    margin: 0;
+    letter-spacing: 0.5px;
 }
 
 .inputGroup {

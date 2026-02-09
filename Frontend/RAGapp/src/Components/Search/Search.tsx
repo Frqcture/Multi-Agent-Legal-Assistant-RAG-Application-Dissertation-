@@ -21,7 +21,8 @@ interface AskResponse {
 }
 
 // --- API Helpers ---
-const BASE_URL = 'http://192.168.0.137:8000';
+const BASE_URL = 'http://192.168.0.193:8000';
+//const BASE_URL = import.meta.env.BASE_URL;
 
 async function logoutUser() {
     try {
@@ -235,7 +236,8 @@ const Search: React.FC = () => {
 
                 {messages.length === 0 && (
                     <div className={styles.headerSection}>
-                        <h1 className={styles.mainTitle}>Ask me a question!</h1>
+                        <h1 className={styles.mainTitle}>Legal Assistant</h1>
+                        <p className={styles.subtitle}>Ask me a legal question</p>
                     </div>
                 )}
 
