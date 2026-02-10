@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import styles from './Register.module.css';
 
-const BASE_URL = 'http://192.168.0.193:8000'; 
-// const BASE_URL = import.meta.env.BASE_URL;
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const Register: React.FC = () => {
     const [username, setUsername] = useState('');

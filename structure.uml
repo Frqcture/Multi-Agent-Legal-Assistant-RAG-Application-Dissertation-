@@ -9,7 +9,7 @@ skinparam ranksep 100
 ' ====================
 ' LAYER 1: PRESENTATION
 ' ====================
-package "Frontend Layer (React + TypeScript + Vite)" #LightBlue {
+package "Frontend Layer (React + TypeScript + Vite)"{
     component [Login Component] as Login
     component [Register Component] as Register
     component [Search Interface] as Search
@@ -26,7 +26,7 @@ package "Frontend Layer (React + TypeScript + Vite)" #LightBlue {
 ' ====================
 ' LAYER 2: API GATEWAY
 ' ====================
-package "API Gateway Layer (FastAPI + Python)" #LightGreen {
+package "API Gateway Layer (FastAPI + Python)" {
     interface "REST Endpoints" as REST
     
     component [FastAPI Router\n--\nPOST /register\nPOST /login\nPOST /search\nPOST /upload\nPOST /workflow\nGET /status] as API
@@ -44,7 +44,7 @@ package "API Gateway Layer (FastAPI + Python)" #LightGreen {
 ' ====================
 ' LAYER 3A: QUERY PROCESSING PATH
 ' ====================
-package "Query Processing Path" #Wheat {
+package "Query Processing Path" {
     component [Multi-Agent\nCoordinator\n--\n<b>Planner Agent</b>\nAnalyzes user query\n--\n<b>Retriever Agent</b>\nFetches relevant docs\n--\n<b>Responder Agent</b>\nGenerates final answer] as Coordinator
     
     component [MCP Server\n--\nJSON-RPC over stdio\nTool Registry\nAsync Handler] as MCP
@@ -60,7 +60,7 @@ package "Query Processing Path" #Wheat {
 ' ====================
 ' LAYER 3B: UPLOAD PROCESSING PATH
 ' ====================
-package "Document Processing Path" #Wheat {
+package "Document Processing Path" {
     component [Ingestion Pipeline\n--\n1. PDF Loader (PyPDF)\n2. Text Splitter (1000 char chunks)\n3. Metadata Extraction\n4. User ID Tagging] as Ingestion
     
     component [OCR Processor\n--\nImage Extraction\nText Recognition\nLayout Analysis] as OCR
@@ -75,7 +75,7 @@ package "Document Processing Path" #Wheat {
 ' LAYER 4: DATA & MODELS
 ' ====================
 
-package "Data Layer" #LightGray {
+package "Data Layer" {
     database "User Database\n(SQLite/PostgreSQL)\n--\n<b>Users Table</b>\n• id (PK)\n• username\n• email\n• hashed_password\n• created_at" as UserDB
     
     database "Vector Database\n(ChromaDB)\n--\n<b>Collections</b>\n• Document embeddings\n• Page metadata\n• User ownership\n--\n<b>Indexes</b>\nSemantic similarity (HNSW)" as VectorDB
@@ -83,7 +83,7 @@ package "Data Layer" #LightGray {
     folder "Upload Directory\n./DocsToIngest/" as Docs
 }
 
-cloud "External: Ollama Service\n--\n<b>LLM:</b> gemma3:4b\n<b>Embeddings:</b> embeddinggemma\n--\nHTTP API (localhost:11434)" as Ollama #LightYellow
+cloud "External: Ollama Service\n--\n<b>LLM:</b> gemma3:4b\n<b>Embeddings:</b> embeddinggemma\n--\nHTTP API (localhost:11434)" as Ollama
 
 ' ====================
 ' VERTICAL FLOW: Frontend -> API -> Processing -> Data

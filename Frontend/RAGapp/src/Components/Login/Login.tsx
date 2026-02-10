@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Login.module.css';
 
-const BASE_URL = 'http://192.168.0.193:8000'; // Match your BackendAPI.py URL
-//const BASE_URL = import.meta.env.BASE_URL;
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const Login: React.FC = () => {
     const [username, setUsername] = useState('');
