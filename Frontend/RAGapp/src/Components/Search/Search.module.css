@@ -5,8 +5,8 @@
     width: 100%;
     display: flex;
     justify-content: center;
-    /* Align slightly above absolute center for visual balance */
-    padding-top: 25vh; 
+    /* Let the dashboard breathe; nav takes ~48px at top */
+    padding-top: 72px; 
     color: #ffffff;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
