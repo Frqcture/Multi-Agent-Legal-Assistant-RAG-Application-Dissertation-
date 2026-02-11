@@ -19,8 +19,21 @@ This document provides detailed explanations of all functions and endpoints in t
 9. [Data Flow Architecture](#data-flow-architecture)
 10. [Performance Considerations](#performance-considerations)
 11. [Multi-Agent Workflow (MCP)](#multi-agent-workflow-mcp)
+12. [Security Hardening (2026-02-11)](#security-hardening-2026-02-11)
 
 ---
+
+## Security Hardening (2026-02-11)
+
+The following changes were applied to reduce security risk and improve tenant isolation:
+
+- **CSRF protection:** A double-submit CSRF token is now set as a `csrf_token` cookie and required in the `X-CSRF-Token` header for authenticated `POST`, `PUT`, `PATCH`, and `DELETE` routes.
+- **Cookie security:** `COOKIE_SECURE` and `COOKIE_SAMESITE` env vars control cookie flags; defaults are safer for production (secure cookies enabled).
+- **CORS tightening:** `ALLOWED_ORIGINS` is now configurable via env and defaults to `localhost` only.
+- **Per-user storage:** Uploads are stored in per-user directories and ingestion logs are per-user to avoid cross-user overwrite/denial issues.
+- **Upload validation:** PDF header checks and streaming size limits prevent oversized or non-PDF uploads; duplicate filenames are rejected.
+- **Protected refresh:** `/refresh` now requires authentication and CSRF.
+- **Secret hygiene:** `Backend/.env` contains a placeholder; real secrets must be provided out-of-band.
 
 ## Authentication Functions
 

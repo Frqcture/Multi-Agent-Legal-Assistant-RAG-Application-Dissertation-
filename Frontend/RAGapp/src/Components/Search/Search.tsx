@@ -24,11 +24,23 @@ interface AskResponse {
 
 // --- API Helpers ---
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const CSRF_COOKIE_NAME = 'csrf_token';
+
+function getCookie(name: string): string | null {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+        return parts.pop()?.split(';').shift() ?? null;
+    }
+    return null;
+}
 
 async function logoutUser() {
     try {
+            const csrfToken = getCookie(CSRF_COOKIE_NAME);
       const response = await fetch(`${BASE_URL}/logout`, {
         method: 'POST',
+                headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : undefined,
         credentials: 'include',
       });
 
@@ -53,11 +65,13 @@ async function askQuestion(question: string): Promise<Message | void> {
     const payload: AskRequest = { question };
 
     try {
+        const csrfToken = getCookie(CSRF_COOKIE_NAME);
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'accept': 'application/json',
                 'Content-Type': 'application/json',
+                ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
             },
             credentials: 'include',
             body: JSON.stringify(payload),
@@ -93,9 +107,11 @@ async function uploadPDFs(files: FileList): Promise<{ message: string; status: s
     })
 
     try {
+        const csrfToken = getCookie(CSRF_COOKIE_NAME);
         const response = await fetch(url, {
             method: 'POST',
             credentials: 'include',
+            headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : undefined,
             body: formData, // No headers needed, browser sets boundary
         });
 
@@ -138,8 +154,10 @@ const Search: React.FC = () => {
 
     const handleDeleteFile = async (filename: string) => {
         try {
+            const csrfToken = getCookie(CSRF_COOKIE_NAME);
             const response = await fetch(`${BASE_URL}/files/${encodeURIComponent(filename)}`, {
                 method: 'DELETE',
+                headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : undefined,
                 credentials: 'include'
             });
             if (response.ok) {
