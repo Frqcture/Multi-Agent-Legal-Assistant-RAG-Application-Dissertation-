@@ -1,207 +1,153 @@
-@startuml
-' structure.uml - high-detail component and interaction map
+@startuml RAG Application Architecture
 
+top to bottom direction
 skinparam componentStyle rectangle
-skinparam shadowing false
-skinparam packageStyle rectangle
-skinparam defaultFontName Courier
-skinparam defaultFontSize 12
+skinparam linetype polyline
+skinparam nodesep 80
+skinparam ranksep 100
 
-package "Frontend (React/Vite)" {
-  [main.tsx] as FE_Main
-  [App.tsx] as FE_App
-  [useAuth.ts] as FE_UseAuth
-  [Login.tsx] as FE_Login
-  [Register.tsx] as FE_Register
-  [Search.tsx] as FE_Search
-  [App.css / index.css / *.module.css] as FE_CSS
-
-  FE_Main --> FE_App : render
-  FE_App --> FE_UseAuth : auth gate
-  FE_App --> FE_Login : route /login
-  FE_App --> FE_Register : route /register
-  FE_App --> FE_Search : route /search
-
-  FE_Login --> FE_CSS : styles
-  FE_Register --> FE_CSS : styles
-  FE_Search --> FE_CSS : styles
+' ====================
+' LAYER 1: PRESENTATION
+' ====================
+package "Frontend Layer (React + TypeScript + Vite)"{
+    component [Login Component] as Login
+    component [Register Component] as Register
+    component [Search Interface] as Search
+    component [Workflow Monitor] as Workflow
+    
+    component [useAuth Hook\n--\nToken Storage\nAuth State] as AuthHook
+    
+    note right of Search
+        Real-time search with
+        streaming responses
+    end note
 }
 
-package "Backend (FastAPI)" {
-  [BackendAPI.py] as BE_API
-  [auth_utils.py] as BE_Auth
-  [database.py] as BE_DB
-  [models.py] as BE_Models
-  [index.py (RAGEngine)] as BE_RAG
-  [ingest.py] as BE_Ingest
-  [ocr_processor.py] as BE_OCR
-
-  BE_API --> BE_Auth : hash/verify + JWT
-  BE_API --> BE_DB : getDb session
-  BE_API --> BE_Models : User model
-  BE_API --> BE_RAG : query/list/delete
-  BE_API --> BE_Ingest : runIngestion()
-  BE_Ingest --> BE_OCR : OCR utilities
-  BE_Ingest --> BE_RAG : uses Chroma schema
+' ====================
+' LAYER 2: API GATEWAY
+' ====================
+package "API Gateway Layer (FastAPI + Python)" {
+    interface "REST Endpoints" as REST
+    
+    component [FastAPI Router\n--\nPOST /register\nPOST /login\nPOST /search\nPOST /upload\nPOST /workflow\nGET /status] as API
+    
+    component [Auth Middleware\n--\nJWT Validation\nOAuth2 Bearer\nToken Refresh] as AuthMiddleware
+    
+    component [Security Utils\n--\nBcrypt Hashing\nJWT Encode/Decode\nRate Limiting] as AuthUtils
+    
+    note bottom of API
+        CORS enabled for
+        localhost:5173
+    end note
 }
 
-package "Storage / Filesystem" {
-  [users.db] as STORE_SQLITE
-  [DocsToIngest/] as STORE_UPLOADS
-  [IngestedFiles.log] as STORE_LOG
-  [chroma_db/] as STORE_CHROMA
+' ====================
+' LAYER 3A: QUERY PROCESSING PATH
+' ====================
+package "Query Processing Path" {
+    component [Multi-Agent\nCoordinator\n--\n<b>Planner Agent</b>\nAnalyzes user query\n--\n<b>Retriever Agent</b>\nFetches relevant docs\n--\n<b>Responder Agent</b>\nGenerates final answer] as Coordinator
+    
+    component [MCP Server\n--\nJSON-RPC over stdio\nTool Registry\nAsync Handler] as MCP
+    
+    component [RAG Engine\n--\nQuery Pipeline\nPrompt Templates\nContext Formatting\nMetadata Filtering] as RAGEngine
+    
+    note right of Coordinator
+        Workflow tracking with
+        session IDs and step logging
+    end note
 }
 
-package "External / Libraries" {
-  [Ollama LLM (gemma3:4b)] as EXT_LLM
-  [Ollama Embeddings (embeddinggemma)] as EXT_EMB
-  [Chroma Vectorstore] as EXT_CHROMA
-  [LangChain] as EXT_LANGCHAIN
-  [PyPDF / PDF2Image / Tesseract / RapidOCR] as EXT_OCR
-  [FastAPI / SlowAPI / SQLAlchemy] as EXT_API
+' ====================
+' LAYER 3B: UPLOAD PROCESSING PATH
+' ====================
+package "Document Processing Path" {
+    component [Ingestion Pipeline\n--\n1. PDF Loader (PyPDF)\n2. Text Splitter (1000 char chunks)\n3. Metadata Extraction\n4. User ID Tagging] as Ingestion
+    
+    component [OCR Processor\n--\nImage Extraction\nText Recognition\nLayout Analysis] as OCR
+    
+    note left of Ingestion
+        15MB max file size
+        Supports: PDF, images
+    end note
 }
 
-' --- Frontend -> Backend API calls ---
-FE_UseAuth --> BE_API : GET /me (cookie auth)
-FE_Login --> BE_API : POST /login (form-urlencoded)
-FE_Register --> BE_API : POST /register (form-urlencoded)
-FE_Search --> BE_API : POST /ask (JSON)
-FE_Search --> BE_API : POST /upload (multipart)
-FE_Search --> BE_API : GET /files
-FE_Search --> BE_API : DELETE /files/{filename}
-FE_Search --> BE_API : POST /logout
+' ====================
+' LAYER 4: DATA & MODELS
+' ====================
 
-' --- Backend endpoints and internal flow ---
-BE_API --> BE_Auth : createAccessToken()
-BE_API --> BE_Auth : verifyPassword()
-BE_API --> BE_DB : SessionLocal
-BE_DB --> STORE_SQLITE : SQLite users table
-BE_Models --> STORE_SQLITE : schema (users)
+package "Data Layer" {
+    database "User Database\n(SQLite/PostgreSQL)\n--\n<b>Users Table</b>\n• id (PK)\n• username\n• email\n• hashed_password\n• created_at" as UserDB
+    
+    database "Vector Database\n(ChromaDB)\n--\n<b>Collections</b>\n• Document embeddings\n• Page metadata\n• User ownership\n--\n<b>Indexes</b>\nSemantic similarity (HNSW)" as VectorDB
+    
+    folder "Upload Directory\n./DocsToIngest/" as Docs
+}
 
-BE_API --> STORE_UPLOADS : save uploads
-BE_API --> STORE_LOG : update on delete
-BE_API --> STORE_CHROMA : refresh RAGEngine
+cloud "External: Ollama Service\n--\n<b>LLM:</b> gemma3:4b\n<b>Embeddings:</b> embeddinggemma\n--\nHTTP API (localhost:11434)" as Ollama
 
-BE_RAG --> EXT_EMB : embeddings
-BE_RAG --> EXT_LLM : generation
-BE_RAG --> EXT_CHROMA : vectorstore
-BE_RAG --> EXT_LANGCHAIN : prompts, splitters
-BE_RAG --> STORE_CHROMA : persisted vectors
+' ====================
+' VERTICAL FLOW: Frontend -> API -> Processing -> Data
+' ====================
 
-BE_Ingest --> EXT_EMB : embeddings
-BE_Ingest --> EXT_LANGCHAIN : loaders + splitters
-BE_Ingest --> EXT_CHROMA : add_documents
-BE_Ingest --> EXT_OCR : OCR fallbacks
-BE_Ingest --> STORE_UPLOADS : read documents
-BE_Ingest --> STORE_LOG : track processed
-BE_Ingest --> STORE_CHROMA : persist chunks
+' Layer 1 to Layer 2
+Login -down-> REST : "POST /login"
+Register -down-> REST : "POST /register"
+Search -down-> REST : "POST /search\nPOST /workflow"
+Workflow -down-> REST : "GET /status"
 
-BE_API --> EXT_API : FastAPI + SlowAPI
+AuthHook .down.> REST : "Bearer Token"
 
-' --- Detailed Endpoint Responsibilities ---
-component "GET /me" as EP_ME
-component "POST /login" as EP_LOGIN
-component "POST /logout" as EP_LOGOUT
-component "POST /register" as EP_REGISTER
-component "POST /ask" as EP_ASK
-component "POST /refresh" as EP_REFRESH
-component "POST /upload" as EP_UPLOAD
-component "GET /files" as EP_FILES
-component "DELETE /files/{filename}" as EP_DELETE
+' Layer 2 internal
+REST -down- API
+API -right-> AuthMiddleware
+AuthMiddleware -right-> AuthUtils
 
-BE_API --> EP_ME
-BE_API --> EP_LOGIN
-BE_API --> EP_LOGOUT
-BE_API --> EP_REGISTER
-BE_API --> EP_ASK
-BE_API --> EP_REFRESH
-BE_API --> EP_UPLOAD
-BE_API --> EP_FILES
-BE_API --> EP_DELETE
+' Layer 2 to Layer 3 - Split paths
+API -down-> Coordinator : "Initiate Query\n(user_id, query)"
+API -down-> Ingestion : "Upload File\n(PDF + user_id)"
+API -down-> UserDB : "Auth & User Mgmt"
 
-EP_ME --> BE_Auth : decode JWT from cookie
-EP_ME --> BE_DB : lookup User
+' Layer 3A: Query Path
+Coordinator -down-> MCP : "Subprocess\nCommunication"
+MCP -down-> RAGEngine : "search_docs()\nget_context()"
+RAGEngine -down-> VectorDB : "Similarity Search\n+ User Filter"
 
-EP_LOGIN --> BE_DB : lookup User
-EP_LOGIN --> BE_Auth : verifyPassword
-EP_LOGIN --> BE_Auth : createAccessToken
+' Layer 3B: Upload Path
+Ingestion -left-> OCR : "Extract Text\nfrom Images"
+Ingestion -down-> VectorDB : "Store Embeddings\n+ Metadata"
+Docs -down-> Ingestion : "Source Files"
 
-EP_LOGOUT --> BE_API : delete auth cookie
+' External service connections
+RAGEngine -right-> Ollama : "LLM Completion\n(streaming)"
+Ingestion -right-> Ollama : "Generate\nEmbeddings"
+VectorDB .right.> Ollama : "Vector\nGeneration"
 
-EP_REGISTER --> BE_DB : create User
-EP_REGISTER --> BE_Auth : hashPassword
+' ====================
+' ADDITIONAL FLOWS
+' ====================
 
-EP_ASK --> BE_RAG : query(question, userId)
+MCP .up.> Coordinator : "Tool Results\n(JSON-RPC response)"
 
-EP_REFRESH --> BE_RAG : new RAGEngine()
+' ====================
+' TECHNOLOGY NOTES
+' ====================
 
-EP_UPLOAD --> STORE_UPLOADS : save files
-EP_UPLOAD --> BE_Ingest : runIngestion(userId)
-EP_UPLOAD --> BE_RAG : new RAGEngine()
-
-EP_FILES --> BE_RAG : listUserFiles(userId)
-EP_DELETE --> BE_RAG : deleteFile(userId, filename)
-EP_DELETE --> STORE_LOG : remove filename
-EP_DELETE --> STORE_UPLOADS : remove file
-
-' --- RAGEngine Internal Flow ---
-component "RAGEngine.query" as RAG_QUERY
-component "RAGEngine.listUserFiles" as RAG_LIST
-component "RAGEngine.deleteFile" as RAG_DELETE
-
-BE_RAG --> RAG_QUERY
-BE_RAG --> RAG_LIST
-BE_RAG --> RAG_DELETE
-
-RAG_QUERY --> EXT_CHROMA : retriever (filter user_id)
-RAG_QUERY --> EXT_LANGCHAIN : prompt + chain
-RAG_QUERY --> EXT_LLM : generate answer
-
-RAG_LIST --> EXT_CHROMA : get metadatas
-RAG_DELETE --> EXT_CHROMA : delete ids
-
-' --- Ingestion Pipeline Detailed Steps ---
-component "runIngestion" as INGEST_RUN
-component "processPdf" as INGEST_PDF
-component "extractDocx" as INGEST_DOCX
-component "extractPptx" as INGEST_PPTX
-component "extractTxt" as INGEST_TXT
-component "extractImage" as INGEST_IMG
-component "loadPdfWithTimeout" as INGEST_PDF_TIMEOUT
-component "extractPdfWithOcr" as INGEST_PDF_OCR
-
-BE_Ingest --> INGEST_RUN
-INGEST_RUN --> INGEST_PDF
-INGEST_RUN --> INGEST_DOCX
-INGEST_RUN --> INGEST_PPTX
-INGEST_RUN --> INGEST_TXT
-INGEST_RUN --> INGEST_IMG
-
-INGEST_PDF --> INGEST_PDF_TIMEOUT : RapidOCR loader
-INGEST_PDF --> INGEST_PDF_TIMEOUT : basic loader
-INGEST_PDF --> INGEST_PDF_OCR : image OCR fallback
-
-INGEST_RUN --> EXT_LANGCHAIN : split docs
-INGEST_RUN --> EXT_CHROMA : add_documents
-
-' --- Auth Utilities ---
-component "hashPassword" as AUTH_HASH
-component "verifyPassword" as AUTH_VERIFY
-component "createAccessToken" as AUTH_TOKEN
-
-BE_Auth --> AUTH_HASH
-BE_Auth --> AUTH_VERIFY
-BE_Auth --> AUTH_TOKEN
-
-' --- User Model ---
-component "User" as MODEL_USER
-note right of MODEL_USER
-  id: int
-  username: str
-  hashedPassword: str
+note bottom of VectorDB
+    <b>User Isolation:</b>
+    Metadata filtering ensures
+    users only access their docs
+    
+    <b>Persistence:</b>
+    SQLite-backed vector store
 end note
 
-BE_Models --> MODEL_USER
-MODEL_USER --> STORE_SQLITE
+legend right
+    |= Technology Stack |
+    | Frontend | React 18 + TypeScript + Vite |
+    | Backend | FastAPI + Uvicorn |
+    | Agents | LangChain + Ollama |
+    | Database | SQLite + ChromaDB |
+    | Auth | JWT + Bcrypt |
+endlegend
 
 @enduml

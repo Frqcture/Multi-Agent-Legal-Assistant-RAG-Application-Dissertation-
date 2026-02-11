@@ -18,6 +18,7 @@ This document provides detailed explanations of all functions and endpoints in t
 8. [Database Structure & Management](#database-structure--management)
 9. [Data Flow Architecture](#data-flow-architecture)
 10. [Performance Considerations](#performance-considerations)
+11. [Multi-Agent Workflow (MCP)](#multi-agent-workflow-mcp)
 
 ---
 
@@ -1378,3 +1379,256 @@ Return answer to frontend
 - Adjust `top_k` results retrieved (current: implicit 4)
 - Enable ChromaDB caching for frequent queries
 - Implement query result caching
+
+---
+
+## Multi-Agent Workflow (MCP)
+
+### Overview
+
+The Multi-Agent Workflow system implements a Model Context Protocol (MCP) based architecture for coordinating multiple AI agents. The MCP server runs as a **separate process** and exposes tools that agents can call. The workflow executes **asynchronously** with polling for status updates.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        FastAPI Backend                          │
+│  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
+│  │ Workflow        │    │ Agent Coordinator                   │ │
+│  │ Endpoints       │───▶│  ┌─────────┐ ┌─────────┐ ┌────────┐ │ │
+│  │ /workflow/start │    │  │ Planner │→│Retriever│→│Responder│ │
+│  │ /workflow/status│    │  └─────────┘ └─────────┘ └────────┘ │ │
+│  └─────────────────┘    └────────────────┬────────────────────┘ │
+└──────────────────────────────────────────┼──────────────────────┘
+                                           │ JSON-RPC (stdio)
+                              ┌────────────▼────────────┐
+                              │     MCP Server          │
+                              │  (Separate Process)     │
+                              │  ┌──────────────────┐   │
+                              │  │ Tool Handlers    │   │
+                              │  │ - search_docs    │   │
+                              │  │ - list_user_docs │   │
+                              │  │ - answer_question│   │
+                              │  └────────┬─────────┘   │
+                              └───────────┼─────────────┘
+                                          │
+                              ┌───────────▼─────────────┐
+                              │  RAG Engine & ChromaDB  │
+                              └─────────────────────────┘
+```
+
+### Components
+
+#### 1. MCP Server (`mcp_server.py`)
+
+Runs as a separate Python process, communicating via JSON-RPC over stdio.
+
+**Starting the Server:**
+```bash
+python mcp_server.py
+```
+
+**Protocol:** JSON-RPC 2.0 over stdio (line-delimited JSON)
+
+**Supported Methods:**
+- `initialize` - Handshake with protocol version
+- `tools/list` - List available tools
+- `tools/call` - Execute a tool with arguments
+- `ping` - Health check
+
+---
+
+#### 2. MCP Tools (`mcp_tools.py`)
+
+Tool definitions that wrap RAG capabilities:
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `search_docs` | Semantic search over user's documents | `query`, `user_id`, `top_k` |
+| `list_user_docs` | List all uploaded documents | `user_id` |
+| `get_doc_summary` | Get preview of a specific document | `user_id`, `filename` |
+| `answer_question` | Generate RAG answer with citations | `question`, `user_id` |
+
+---
+
+#### 3. Agent Coordinator (`agents.py`)
+
+Orchestrates the multi-agent workflow with three specialized agents:
+
+**Planner Agent**
+- Analyzes the user's query
+- Lists available documents
+- Creates execution plan using LLM
+
+**Retriever Agent**
+- Searches documents using MCP tools
+- Collects relevant chunks with sources
+- Reports what was found
+
+**Responder Agent**
+- Generates final answer using RAG
+- Includes citations from sources
+- Handles fallback if RAG fails
+
+---
+
+#### 4. Workflow State Machine
+
+```
+PENDING → RUNNING → COMPLETED
+              ↓
+           FAILED
+```
+
+**WorkflowState Fields:**
+- `workflow_id` - Unique identifier
+- `query` - Original user question
+- `user_id` - For document isolation
+- `status` - Current state
+- `steps` - List of agent actions
+- `answer` - Final response (when completed)
+- `error` - Error message (if failed)
+- `created_at` / `completed_at` - Timestamps
+
+---
+
+### API Endpoints
+
+#### `POST /workflow/start`
+
+Start an asynchronous multi-agent workflow.
+
+**Request:**
+```json
+{
+  "question": "Summarize the key points from my documents"
+}
+```
+
+**Response:**
+```json
+{
+  "workflow_id": "abc-123-def",
+  "status": "pending",
+  "message": "Workflow started. Poll /workflow/status/{workflow_id} for updates."
+}
+```
+
+---
+
+#### `GET /workflow/status/{workflow_id}`
+
+Poll for workflow progress and results.
+
+**Response (Running):**
+```json
+{
+  "workflow_id": "abc-123-def",
+  "query": "Summarize the key points",
+  "status": "running",
+  "steps": [
+    {
+      "agent": "planner",
+      "message": "Plan: List docs, search for summaries, synthesize.",
+      "timestamp": "2026-02-09T10:30:00",
+      "tool_calls": [{"tool": "list_user_docs", "args": {"user_id": "1"}}],
+      "tool_results": [{"success": true, "data": {"files": ["doc1.pdf"]}}]
+    }
+  ],
+  "answer": null,
+  "created_at": "2026-02-09T10:30:00"
+}
+```
+
+**Response (Completed):**
+```json
+{
+  "workflow_id": "abc-123-def",
+  "status": "completed",
+  "steps": [...],
+  "answer": "The key points are: 1) ... [doc1.pdf, p.3] 2) ... [doc2.pdf, p.7]",
+  "completed_at": "2026-02-09T10:30:15"
+}
+```
+
+---
+
+#### `GET /workflow/list`
+
+List recent workflows for the current user.
+
+**Response:**
+```json
+{
+  "workflows": [
+    {"workflow_id": "abc-123", "status": "completed", "query": "...", ...},
+    {"workflow_id": "def-456", "status": "failed", "query": "...", ...}
+  ]
+}
+```
+
+---
+
+### Frontend Integration
+
+The frontend includes a `WorkflowTrigger` component that:
+1. Starts a workflow via `POST /workflow/start`
+2. Polls `GET /workflow/status/{id}` every second
+3. Displays real-time agent step updates
+4. Shows final answer when completed
+
+**Toggle Agent Mode:**
+- Click "Agent Mode" button in navbar
+- When active, shows "Run Multi-Agent" button
+- Workflow panel appears below search input
+
+---
+
+### Running the System
+
+The MCP server is **automatically spawned** as a subprocess when a workflow starts. You don't need to run it manually.
+
+**1. Start FastAPI Backend:**
+```bash
+cd Backend
+uvicorn BackendAPI:app --reload --host 0.0.0.0 --port 8000
+```
+
+**2. Start Frontend:**
+```bash
+cd Frontend/RAGapp
+npm run dev
+```
+
+**3. (Optional) Test MCP Server:**
+```bash
+cd Backend
+python3 mcp_server.py --test
+```
+
+**4. Test Workflow:**
+- Login to the app
+- Toggle "Agent Mode" ON
+- Type a question
+- Click "Run Multi-Agent"
+- Watch the agent steps appear in real-time
+
+---
+
+### Error Handling
+
+- **MCP Server Not Running:** Workflow fails with connection error
+- **No Documents:** Agents report empty results, responder provides fallback message
+- **Timeout:** Each agent step has implicit timeout via subprocess communication
+- **LLM Errors:** Caught and logged, workflow marked as failed
+
+---
+
+### Future Enhancements
+
+- **Persistent Storage:** Store workflows in database instead of memory
+- **Streaming:** Use WebSockets for real-time updates instead of polling
+- **Custom Agents:** Allow users to define custom agent chains
+- **Tool Extensions:** Add more MCP tools (web search, calculations, etc.)
+
+

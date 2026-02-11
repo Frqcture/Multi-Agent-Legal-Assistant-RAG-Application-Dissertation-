@@ -30,3 +30,4 @@ def createAccessToken(data: dict):
     toEncode.update({"exp": expire})
     return jwt.encode(toEncode, SECRET_KEY, algorithm=ALGORITHM)
 
+

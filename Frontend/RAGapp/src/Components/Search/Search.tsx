@@ -1,9 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Search.module.css';
-import { BiArrowToRight, BiBook, BiLibrary } from "react-icons/bi";
+import { BiArrowToRight, BiBook, BiLibrary, BiBot } from "react-icons/bi";
 import { CiLogout } from "react-icons/ci";
 import { FiX, FiTrash2 } from 'react-icons/fi';
+import { WorkflowTrigger } from '../Workflow/Workflow';
 
 // Define the structure of a message
 interface Message {
@@ -21,8 +22,7 @@ interface AskResponse {
 }
 
 // --- API Helpers ---
-const BASE_URL = 'http://192.168.0.193:8000';
-//const BASE_URL = import.meta.env.BASE_URL;
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 async function logoutUser() {
     try {
@@ -112,6 +112,7 @@ const Search: React.FC = () => {
     const [inputValue, setInputValue] = useState<string>("");
     const [messages, setMessages] = useState<Message[]>([]);
     const [isIngesting, setIsIngesting] = useState<boolean>(false);
+    const [useAgentMode, setUseAgentMode] = useState<boolean>(false);
 
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
     const [userFiles, setUserFiles] = useState<string[]>([]);
@@ -225,6 +226,12 @@ const Search: React.FC = () => {
     return (
         <div className={styles.pageContainer}>
             <div className={styles.navbar}>
+                <button
+                    className={`${styles.navButton} ${useAgentMode ? styles.navButtonActive : ''}`}
+                    onClick={() => setUseAgentMode(!useAgentMode)}
+                >
+                  <BiBot /> {useAgentMode ? 'Agent Mode ON' : 'Agent Mode'}
+                </button>
                 <button className={styles.navButton} onClick={handleOpenLibrary}>
                   <BiLibrary /> Library
                 </button>
@@ -291,6 +298,25 @@ const Search: React.FC = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Multi-Agent Workflow Panel */}
+                {useAgentMode && inputValue.trim() && (
+                    <div style={{ marginTop: '1rem', width: '100%', maxWidth: '600px' }}>
+                        <WorkflowTrigger
+                            baseUrl={BASE_URL}
+                            question={inputValue}
+                            onComplete={(wf) => {
+                                if (wf.answer) {
+                                    setMessages(prev => [...prev, {
+                                        id: Date.now(),
+                                        text: `[Multi-Agent] ${wf.answer}`,
+                                        sender: 'bot'
+                                    }]);
+                                }
+                            }}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* --- Library Modal Popup --- */}
