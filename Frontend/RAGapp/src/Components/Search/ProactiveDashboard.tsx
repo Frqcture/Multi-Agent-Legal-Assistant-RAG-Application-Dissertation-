@@ -51,6 +51,16 @@ interface ProactiveDashboardProps {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const CHECKLIST_STORAGE_KEY = 'proactive_checklist';
+const CSRF_COOKIE_NAME = 'csrf_token';
+
+function getCookie(name: string): string | null {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+        return parts.pop()?.split(';').shift() ?? null;
+    }
+    return null;
+}
 
 function loadSavedChecklist(): Record<string, boolean> {
     try {
@@ -231,9 +241,14 @@ const ProactiveDashboard: React.FC<ProactiveDashboardProps> = ({
         setLoading(true);
         setError(null);
         try {
+            const csrfToken = getCookie(CSRF_COOKIE_NAME);
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (csrfToken) {
+                headers['X-CSRF-Token'] = csrfToken;
+            }
             const res = await fetch(`${baseUrl}/proactive-insights`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 credentials: 'include',
                 body: JSON.stringify({ query: latestQuery }),
             });

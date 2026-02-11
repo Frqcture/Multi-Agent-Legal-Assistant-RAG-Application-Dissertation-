@@ -27,6 +27,17 @@ interface WorkflowProps {
     baseUrl: string;
 }
 
+const CSRF_COOKIE_NAME = 'csrf_token';
+
+function getCookie(name: string): string | null {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+        return parts.pop()?.split(';').shift() ?? null;
+    }
+    return null;
+}
+
 const agentIcons: Record<string, React.ReactNode> = {
     planner: <BiBrain />,
     retriever: <BiSearch />,
@@ -111,10 +122,15 @@ export const useWorkflow = (baseUrl: string) => {
         setWorkflow(null);
 
         try {
+            const csrfToken = getCookie(CSRF_COOKIE_NAME);
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (csrfToken) {
+                headers['X-CSRF-Token'] = csrfToken;
+            }
             // Start workflow
             const startRes = await fetch(`${baseUrl}/workflow/start`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 credentials: 'include',
                 body: JSON.stringify({ question }),
             });

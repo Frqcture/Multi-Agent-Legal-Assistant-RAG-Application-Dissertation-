@@ -89,18 +89,34 @@ def loadPdfWithTimeout(filePath: str, useOcr: bool = True, timeoutSeconds: int =
     return result[0]
 
 
-def getProcessedFiles():
+def get_user_source_directory(user_id: str) -> str:
+    """Return per-user upload directory path."""
+    base_dir = Path(SOURCE_DIRECTORY).resolve()
+    user_dir = (base_dir / str(user_id)).resolve()
+    user_dir.mkdir(parents=True, exist_ok=True)
+    if not str(user_dir).startswith(str(base_dir)):
+        raise ValueError("Invalid user upload directory")
+    return str(user_dir)
+
+
+def get_user_log_file(user_id: str) -> str:
+    """Return per-user ingestion log path."""
+    user_dir = Path(get_user_source_directory(user_id))
+    return str((user_dir / LOG_FILE).resolve())
+
+
+def getProcessedFiles(log_file: str):
     """Get set of already-processed filenames from log file."""
     try:
-        with open(LOG_FILE, 'r') as f:
+        with open(log_file, 'r') as f:
             return set(line.strip() for line in f)
     except FileNotFoundError:
         return set()
 
 
-def updateProcessedFiles(filename: str):
+def updateProcessedFiles(log_file: str, filename: str):
     """Append filename to processed log."""
-    with open(LOG_FILE, 'a') as f:
+    with open(log_file, 'a') as f:
         f.write(filename + '\n')
 
 
@@ -314,18 +330,18 @@ def runIngestion(userId: str):
     """Main ingestion pipeline supporting multiple document formats."""
     embeddingModel = OllamaEmbeddings(model="embeddinggemma")
 
-    if not os.path.exists(SOURCE_DIRECTORY):
-        os.makedirs(SOURCE_DIRECTORY)
+    source_directory = get_user_source_directory(userId)
+    log_file = get_user_log_file(userId)
 
     vectorstore = Chroma(
         persist_directory=PERSIST_DIRECTORY,
         embedding_function=embeddingModel
     )
 
-    processedFiles = getProcessedFiles()
+    processedFiles = getProcessedFiles(log_file)
     supportedExtensions = ('.pdf', '.docx', '.pptx', '.txt', '.png', '.jpg', '.jpeg', '.tiff', '.bmp')
 
-    allFiles = [f for f in os.listdir(SOURCE_DIRECTORY) if any(f.lower().endswith(ext) for ext in supportedExtensions)]
+    allFiles = [f for f in os.listdir(source_directory) if any(f.lower().endswith(ext) for ext in supportedExtensions)]
     newFiles = [f for f in allFiles if f not in processedFiles]
 
     if not newFiles:
@@ -336,7 +352,7 @@ def runIngestion(userId: str):
 
     for filename in newFiles:
         safeFilename = os.path.basename(filename)
-        filePath = os.path.join(SOURCE_DIRECTORY, safeFilename)
+        filePath = os.path.join(source_directory, safeFilename)
         fileExt = Path(filePath).suffix.lower()
 
         try:
@@ -389,7 +405,7 @@ def runIngestion(userId: str):
                 continue
 
             vectorstore.add_documents(documents=splits)
-            updateProcessedFiles(filename)
+            updateProcessedFiles(log_file, filename)
             logger.info(f"Ingested {filename}: {len(splits)} chunks")
             ingestedCount += 1
 

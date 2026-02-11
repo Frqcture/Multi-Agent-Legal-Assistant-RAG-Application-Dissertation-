@@ -1,5 +1,6 @@
 import asyncio
 import os
+import secrets
 from pathlib import Path
 from typing import List
 import logging
@@ -14,7 +15,6 @@ from pypdf import PdfReader
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-import shutil
 
 from auth_utils import verifyPassword, createAccessToken, hashPassword, ALGORITHM, SECRET_KEY
 from jose import jwt, JWTError
@@ -22,7 +22,7 @@ from database import engine, Base, getDb
 from models import User
 from index import RAGEngine
 from ingest import runIngestion
-from agents import get_coordinator, WorkflowStatus
+from agents import get_coordinator
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -33,15 +33,36 @@ MAX_FILE_SIZE = 15 * 1024 * 1024
 UPLOAD_DIR = "DocsToIngest"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+ACCESS_COOKIE_NAME = "access_token"
+CSRF_COOKIE_NAME = "csrf_token"
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _normalize_samesite(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in {"lax", "strict", "none"}:
+        return normalized
+    return "lax"
+
+
+COOKIE_SECURE = _env_bool("COOKIE_SECURE", True)
+COOKIE_SAMESITE = _normalize_samesite(os.getenv("COOKIE_SAMESITE", "lax"))
+
 # CORS origins
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://0.0.0.0:5173",
-    "http://192.168.0.137:5173",
-    "http://192.168.0.193:5173",
-    "http://172.22.87.206:5173"
-]
+_allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+if _allowed_origins_env.strip():
+    ALLOWED_ORIGINS = [origin.strip() for origin in _allowed_origins_env.split(",") if origin.strip()]
+else:
+    ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
 # FastAPI setup
 limiter = Limiter(key_func=get_remote_address)
@@ -99,10 +120,68 @@ def isPdfSafe(filePath: str) -> tuple:
         return False, "Malformed or corrupted PDF"
 
 
+def _get_user_upload_dir(user_id: int) -> Path:
+    base_dir = Path(UPLOAD_DIR).resolve()
+    user_dir = (base_dir / str(user_id)).resolve()
+    user_dir.mkdir(parents=True, exist_ok=True)
+    if not str(user_dir).startswith(str(base_dir)):
+        raise HTTPException(status_code=400, detail="Invalid upload directory")
+    return user_dir
+
+
+def _ensure_csrf_cookie(response: Response, existing_token: str | None) -> str:
+    if existing_token:
+        return existing_token
+    token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=token,
+        httponly=False,
+        max_age=60 * 60 * 24,
+        samesite=COOKIE_SAMESITE,
+        secure=COOKIE_SECURE,
+        path="/",
+    )
+    return token
+
+
+def _require_csrf(request: Request):
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return
+    cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
+    header_token = request.headers.get("x-csrf-token")
+    if not cookie_token or not header_token or cookie_token != header_token:
+        raise HTTPException(status_code=403, detail="CSRF token missing or invalid")
+
+
+def _looks_like_pdf(upload: UploadFile) -> bool:
+    try:
+        header = upload.file.read(5)
+        upload.file.seek(0)
+        return header == b"%PDF-"
+    except Exception:
+        return False
+
+
+def _save_upload_file(upload: UploadFile, destination: Path, max_bytes: int) -> int:
+    total = 0
+    with destination.open("wb") as buffer:
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                raise HTTPException(status_code=413, detail=f"{upload.filename} is too large")
+            buffer.write(chunk)
+    return total
+
+
 @app.get("/me")
 @limiter.limit("6/minute")
-async def getMe(request: Request, currentUser: User = Depends(getCurrentUser)):
+async def getMe(request: Request, response: Response, currentUser: User = Depends(getCurrentUser)):
     """Return authenticated user info."""
+    _ensure_csrf_cookie(response, request.cookies.get(CSRF_COOKIE_NAME))
     return {
         "id": currentUser.id,
         "username": currentUser.username,
@@ -123,27 +202,35 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
 
     response = JSONResponse(content={"message": "Login Successful"})
     response.set_cookie(
-        key="access_token",
+        key=ACCESS_COOKIE_NAME,
         value=accessToken,
         httponly=True,
         max_age=60 * 60 * 24,
-        samesite="lax",
-        secure=False,
+        samesite=COOKIE_SAMESITE,
+        secure=COOKIE_SECURE,
         path="/"
     )
+    _ensure_csrf_cookie(response, request.cookies.get(CSRF_COOKIE_NAME))
     return response
 
 
 @app.post("/logout")
 @limiter.limit("5/minute")
-async def logout(request: Request):
+async def logout(request: Request, csrf=Depends(_require_csrf)):
     """Clear JWT cookie."""
     response = JSONResponse(content={"message": "Logout Successful"})
     response.delete_cookie(
-        key="access_token",
+        key=ACCESS_COOKIE_NAME,
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite=COOKIE_SAMESITE,
+        secure=COOKIE_SECURE,
+        path="/"
+    )
+    response.delete_cookie(
+        key=CSRF_COOKIE_NAME,
+        httponly=False,
+        samesite=COOKIE_SAMESITE,
+        secure=COOKIE_SECURE,
         path="/"
     )
     return response
@@ -168,7 +255,12 @@ async def register(request: Request, form_data: OAuth2PasswordRequestForm = Depe
 
 @app.post("/ask")
 @limiter.limit("20/minute")
-async def askQuestion(request: Request, queryRequest: QueryRequest, currentUser: User = Depends(getCurrentUser)):
+async def askQuestion(
+    request: Request,
+    queryRequest: QueryRequest,
+    currentUser: User = Depends(getCurrentUser),
+    csrf=Depends(_require_csrf)
+):
     """Query knowledge base with context filtering by user."""
     try:
         answer = ragApp.query(queryRequest.question, userId=currentUser.id)
@@ -179,7 +271,7 @@ async def askQuestion(request: Request, queryRequest: QueryRequest, currentUser:
 
 @app.post("/refresh")
 @limiter.limit("5/minute")
-async def refresh(request: Request):
+async def refresh(request: Request, currentUser: User = Depends(getCurrentUser), csrf=Depends(_require_csrf)):
     """Reload RAG engine."""
     global ragApp
     ragApp = RAGEngine()
@@ -188,28 +280,33 @@ async def refresh(request: Request):
 
 @app.post("/upload")
 @limiter.limit("5/minute")
-async def uploadFile(request: Request, files: List[UploadFile] = File(...), currentUser: User = Depends(getCurrentUser)):
+async def uploadFile(
+    request: Request,
+    files: List[UploadFile] = File(...),
+    currentUser: User = Depends(getCurrentUser),
+    csrf=Depends(_require_csrf)
+):
     """Upload and ingest documents."""
     savedFiles = []
     fileStatuses = []
+    user_dir = _get_user_upload_dir(currentUser.id)
 
     for file in files:
-        if not file.filename.endswith(".pdf"):
+        if not file.filename.lower().endswith(".pdf"):
             raise HTTPException(status_code=400, detail=f"{file.filename} is not a PDF")
-
-        if file.size > MAX_FILE_SIZE:
-            raise HTTPException(status_code=413, detail=f"{file.filename} is too large")
+        if not _looks_like_pdf(file):
+            raise HTTPException(status_code=400, detail=f"{file.filename} is not a valid PDF")
 
         safeFilename = os.path.basename(file.filename)
-        baseDir = Path(UPLOAD_DIR).resolve()
-        filePath = (baseDir / safeFilename).resolve()
+        filePath = (user_dir / safeFilename).resolve()
 
-        if not str(filePath).startswith(str(baseDir)):
+        if not str(filePath).startswith(str(user_dir)):
             raise HTTPException(status_code=400, detail="Invalid filename")
+        if filePath.exists():
+            raise HTTPException(status_code=409, detail=f"{file.filename} already exists")
 
         try:
-            with open(filePath, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+            _save_upload_file(file, filePath, MAX_FILE_SIZE)
 
             isSafe, statusMsg = isPdfSafe(str(filePath))
             if not isSafe:
@@ -249,7 +346,11 @@ async def listFiles(currentUser: User = Depends(getCurrentUser)):
 
 
 @app.delete("/files/{filename}")
-async def deleteFile(filename: str, currentUser: User = Depends(getCurrentUser)):
+async def deleteFile(
+    filename: str,
+    currentUser: User = Depends(getCurrentUser),
+    csrf=Depends(_require_csrf)
+):
     """Delete file from vectorstore and local storage."""
     try:
         deleted = ragApp.deleteFile(userId=currentUser.id, filename=filename)
@@ -257,19 +358,21 @@ async def deleteFile(filename: str, currentUser: User = Depends(getCurrentUser))
             raise HTTPException(status_code=404, detail="File not found")
 
         # Remove from log
-        from ingest import LOG_FILE
-        if os.path.exists(LOG_FILE):
-            with open(LOG_FILE, "r") as f:
+        from ingest import get_user_log_file
+        log_file = get_user_log_file(currentUser.id)
+        if os.path.exists(log_file):
+            with open(log_file, "r") as f:
                 lines = f.readlines()
-            with open(LOG_FILE, "w") as f:
+            with open(log_file, "w") as f:
                 for line in lines:
                     if line.strip() != filename:
                         f.write(line)
 
         # Remove from disk
-        filePath = os.path.join(UPLOAD_DIR, filename)
-        if os.path.exists(filePath):
-            os.remove(filePath)
+        user_dir = _get_user_upload_dir(currentUser.id)
+        filePath = (user_dir / os.path.basename(filename)).resolve()
+        if str(filePath).startswith(str(user_dir)) and filePath.exists():
+            filePath.unlink()
 
         return {"message": f"Deleted {filename}"}
 
@@ -290,7 +393,8 @@ class WorkflowRequest(BaseModel):
 async def startWorkflow(
     request: Request,
     workflowRequest: WorkflowRequest,
-    currentUser: User = Depends(getCurrentUser)
+    currentUser: User = Depends(getCurrentUser),
+    csrf=Depends(_require_csrf)
 ):
     """
     Start an async multi-agent workflow.
@@ -505,11 +609,12 @@ class InsightsRequest(BaseModel):
 
 
 @app.post("/proactive-insights")
-@limiter.limit("2/minute")
+@limiter.limit("10/minute")
 async def getProactiveInsights(
     request: Request,
     body: InsightsRequest,
     currentUser: User = Depends(getCurrentUser),
+    csrf=Depends(_require_csrf),
 ):
     """
     Single LLM call to produce all four proactive insight panels.
