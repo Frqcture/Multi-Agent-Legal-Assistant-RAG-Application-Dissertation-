@@ -5,6 +5,7 @@ import { BiArrowToRight, BiBook, BiLibrary, BiBot } from "react-icons/bi";
 import { CiLogout } from "react-icons/ci";
 import { FiX, FiTrash2 } from 'react-icons/fi';
 import { WorkflowTrigger } from '../Workflow/Workflow';
+import ProactiveDashboard from './ProactiveDashboard';
 
 // Define the structure of a message
 interface Message {
@@ -116,6 +117,7 @@ const Search: React.FC = () => {
 
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
     const [userFiles, setUserFiles] = useState<string[]>([]);
+    const [lastAskedQuery, setLastAskedQuery] = useState<string>("");
     
     // Ref to trigger the hidden file input
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -169,6 +171,7 @@ const Search: React.FC = () => {
         }
 
         setMessages(prev => [...prev, userMessage]);
+        setLastAskedQuery(inputValue);
         setInputValue("");
 
         const botMessage = await askQuestion(inputValue);
@@ -242,10 +245,16 @@ const Search: React.FC = () => {
             <div className={styles.contentWrapper}>
 
                 {messages.length === 0 && (
-                    <div className={styles.headerSection}>
-                        <h1 className={styles.mainTitle}>Legal Assistant</h1>
-                        <p className={styles.subtitle}>Ask me a legal question</p>
-                    </div>
+                    <>
+                        <div className={styles.headerSection}>
+                            <h1 className={styles.mainTitle}>Legal Assistant</h1>
+                            <p className={styles.subtitle}>Ask me a legal question</p>
+                        </div>
+                        <ProactiveDashboard
+                            baseUrl={BASE_URL}
+                            latestQuery={lastAskedQuery}
+                        />
+                    </>
                 )}
 
                 <div className={styles.messageHistory}>

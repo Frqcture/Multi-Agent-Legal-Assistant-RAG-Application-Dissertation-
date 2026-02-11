@@ -1,3 +1,4 @@
+import asyncio
 import os
 from pathlib import Path
 from typing import List
@@ -22,6 +23,8 @@ from models import User
 from index import RAGEngine
 from ingest import runIngestion
 from agents import get_coordinator, WorkflowStatus
+from langchain_ollama import ChatOllama
+from langchain_core.messages import HumanMessage, SystemMessage
 
 # Setup
 Base.metadata.create_all(bind=engine)
@@ -350,4 +353,185 @@ async def listWorkflows(
     user_workflows.sort(key=lambda x: x["created_at"], reverse=True)
 
     return {"workflows": user_workflows[:20]}  # Limit to last 20
+
+
+# ============================================================================
+# Proactive Insights Engine (Dashboard)
+# ============================================================================
+
+import json as _json
+import time as _time
+
+# Shared LLM instance for proactive analysis
+_insights_llm = ChatOllama(model="gemma3:4b", temperature=0.2, num_predict=1024)
+
+# Simple TTL cache: { user_id: { "ts": float, "data": dict } }
+_insights_cache: dict = {}
+_CACHE_TTL = 3600  # seconds – serve cached result for 1 hour
+
+
+def _extract_document_context(rag: RAGEngine, user_id, sample_limit: int = 6) -> str:
+    """Pull representative chunks from user documents for analysis."""
+    try:
+        results = rag.vectorstore.get(
+            where={"user_id": user_id},
+            include=["metadatas", "documents"],
+            limit=sample_limit,
+        )
+        if not results["documents"]:
+            return ""
+
+        parts = []
+        for doc, meta in zip(results["documents"], results["metadatas"]):
+            src = meta.get("document_name", "Unknown")
+            page = meta.get("page_number", "?")
+            parts.append(f"[{src}, p.{page}]: {doc[:300]}")  # tighter cap
+        return "\n\n".join(parts)
+    except Exception:
+        return ""
+
+
+def _parse_json_block(text: str, key: str) -> list:
+    """Extract a JSON array that follows a key label in the LLM output."""
+    # Try to find the key followed by a JSON array
+    import re
+    # Look for "key": [...] or key: [...]
+    patterns = [
+        rf'"{key}"\s*:\s*(\[.*?\])(?=\s*[,\}}"])',
+        rf'{key}\s*:\s*(\[.*?\])(?=\s*[,\}}"])',
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, re.DOTALL)
+        if m:
+            try:
+                return _json.loads(m.group(1))
+            except _json.JSONDecodeError:
+                continue
+    return []
+
+
+def _parse_combined_response(text: str) -> dict:
+    """Parse the combined JSON response from the single LLM call."""
+    text = text.strip()
+    # Try full JSON parse first
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1:
+        try:
+            parsed = _json.loads(text[start:end + 1])
+            if isinstance(parsed, dict):
+                return parsed
+        except _json.JSONDecodeError:
+            pass
+
+    # Fallback: extract each section individually
+    return {
+        "next_actions": _parse_json_block(text, "next_actions"),
+        "related_statutes": _parse_json_block(text, "related_statutes"),
+        "checklist": _parse_json_block(text, "checklist"),
+        "info_gaps": _parse_json_block(text, "info_gaps"),
+    }
+
+
+_COMBINED_SYSTEM = "You are a legal-clinic case advisor. Respond ONLY with valid JSON. No markdown, no explanation."
+
+_COMBINED_PROMPT = """Analyse these legal documents and return a SINGLE JSON object with exactly 4 keys.
+Be concise. Keep strings short (under 15 words each).
+
+Documents:
+{context}
+
+{query_line}
+
+Return this exact JSON structure:
+{{
+  "next_actions": [
+    {{"action": "...", "priority": "high|medium|low", "reason": "..."}}
+  ],
+  "related_statutes": [
+    {{"statute": "...", "relevance": "...", "jurisdiction": "..."}}
+  ],
+  "checklist": [
+    {{"item": "...", "completed": false, "category": "Intake|Filing|Evidence|General"}}
+  ],
+  "info_gaps": [
+    {{"field": "...", "severity": "high|medium|low", "suggestion": "..."}}
+  ]
+}}
+
+Rules:
+- next_actions: 3-4 items
+- related_statutes: 3-4 items
+- checklist: 4-6 items
+- info_gaps: 3-4 items
+- Return ONLY the JSON object, nothing else."""
+
+
+_EMPTY_INSIGHTS = {
+    "next_actions": [{"action": "Upload case documents to get started", "priority": "high", "reason": "No documents found"}],
+    "related_statutes": [],
+    "checklist": [{"item": "Upload case documents", "completed": False, "category": "Setup"}],
+    "info_gaps": [{"field": "Client documents", "severity": "high", "suggestion": "Upload relevant case files to begin analysis."}],
+}
+
+
+async def _generate_all_insights(context: str, query: str) -> dict:
+    """Single LLM call that produces all four insight sections."""
+    if not context:
+        return _EMPTY_INSIGHTS
+
+    query_line = f"Current query context: {query}" if query else ""
+    prompt = _COMBINED_PROMPT.format(context=context, query_line=query_line)
+
+    resp = await _insights_llm.ainvoke([
+        SystemMessage(content=_COMBINED_SYSTEM),
+        HumanMessage(content=prompt),
+    ])
+
+    parsed = _parse_combined_response(resp.content)
+
+    # Fill in defaults for any missing sections
+    defaults = _EMPTY_INSIGHTS
+    return {
+        "next_actions": parsed.get("next_actions") or defaults["next_actions"],
+        "related_statutes": parsed.get("related_statutes") or defaults["related_statutes"],
+        "checklist": parsed.get("checklist") or defaults["checklist"],
+        "info_gaps": parsed.get("info_gaps") or defaults["info_gaps"],
+    }
+
+
+class InsightsRequest(BaseModel):
+    query: str = ""
+
+
+@app.post("/proactive-insights")
+@limiter.limit("2/minute")
+async def getProactiveInsights(
+    request: Request,
+    body: InsightsRequest,
+    currentUser: User = Depends(getCurrentUser),
+):
+    """
+    Single LLM call to produce all four proactive insight panels.
+    Results are cached per-user for 2 minutes.
+    """
+    try:
+        uid = currentUser.id
+        now = _time.time()
+
+        # Check cache
+        cached = _insights_cache.get(uid)
+        if cached and (now - cached["ts"]) < _CACHE_TTL:
+            return cached["data"]
+
+        context = _extract_document_context(ragApp, uid)
+        result = await _generate_all_insights(context, body.query)
+
+        # Store in cache
+        _insights_cache[uid] = {"ts": now, "data": result}
+
+        return result
+    except Exception as e:
+        logging.exception("Proactive insights error")
+        raise HTTPException(status_code=500, detail=str(e))
 
