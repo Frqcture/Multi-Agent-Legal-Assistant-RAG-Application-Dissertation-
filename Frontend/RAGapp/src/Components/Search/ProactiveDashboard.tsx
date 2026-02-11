@@ -46,6 +46,8 @@ interface ProactiveInsights {
 interface ProactiveDashboardProps {
     baseUrl: string;
     latestQuery?: string;
+    autoCollapsed?: boolean;
+    onExpand?: () => void;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -93,19 +95,24 @@ const priorityBadge: Record<string, string> = {
 
 // ── Sub‑components ─────────────────────────────────────────────────────────
 
-const NextActionsCard: React.FC<{ items: NextAction[] }> = ({ items }) => {
-    const [expanded, setExpanded] = useState(true);
+const NextActionsCard: React.FC<{ items: NextAction[]; autoCollapsed?: boolean; onExpand?: () => void }> = ({ items, autoCollapsed, onExpand }) => {
+    const [manualExpanded, setManualExpanded] = useState(true);
+    const isOpen = autoCollapsed ? false : manualExpanded;
+    const handleClick = () => {
+        if (autoCollapsed && onExpand) { onExpand(); return; }
+        setManualExpanded(!manualExpanded);
+    };
     return (
         <div className={styles.card}>
-            <div className={styles.cardHeader} onClick={() => setExpanded(!expanded)}>
+            <div className={styles.cardHeader} onClick={handleClick}>
                 <div className={styles.cardTitle}>
                     <BiTargetLock className={styles.cardIcon} />
                     <span>Next Best Actions</span>
                     <span className={styles.count}>{items.length}</span>
                 </div>
-                {expanded ? <BiChevronUp /> : <BiChevronDown />}
+                {isOpen ? <BiChevronUp /> : <BiChevronDown />}
             </div>
-            {expanded && (
+            <div className={`${styles.cardBodyWrap} ${isOpen ? styles.cardBodyOpen : styles.cardBodyClosed}`}>
                 <div className={styles.cardBody}>
                     {items.map((a, i) => (
                         <div key={i} className={styles.actionRow}>
@@ -119,24 +126,29 @@ const NextActionsCard: React.FC<{ items: NextAction[] }> = ({ items }) => {
                         </div>
                     ))}
                 </div>
-            )}
+            </div>
         </div>
     );
 };
 
-const StatutesCard: React.FC<{ items: RelatedStatute[] }> = ({ items }) => {
-    const [expanded, setExpanded] = useState(true);
+const StatutesCard: React.FC<{ items: RelatedStatute[]; autoCollapsed?: boolean; onExpand?: () => void }> = ({ items, autoCollapsed, onExpand }) => {
+    const [manualExpanded, setManualExpanded] = useState(true);
+    const isOpen = autoCollapsed ? false : manualExpanded;
+    const handleClick = () => {
+        if (autoCollapsed && onExpand) { onExpand(); return; }
+        setManualExpanded(!manualExpanded);
+    };
     return (
         <div className={styles.card}>
-            <div className={styles.cardHeader} onClick={() => setExpanded(!expanded)}>
+            <div className={styles.cardHeader} onClick={handleClick}>
                 <div className={styles.cardTitle}>
                     <BiBookBookmark className={styles.cardIcon} />
                     <span>Related Statutes</span>
                     <span className={styles.count}>{items.length}</span>
                 </div>
-                {expanded ? <BiChevronUp /> : <BiChevronDown />}
+                {isOpen ? <BiChevronUp /> : <BiChevronDown />}
             </div>
-            {expanded && (
+            <div className={`${styles.cardBodyWrap} ${isOpen ? styles.cardBodyOpen : styles.cardBodyClosed}`}>
                 <div className={styles.cardBody}>
                     {items.length === 0 ? (
                         <p className={styles.emptyText}>Upload documents to see related statutes.</p>
@@ -150,7 +162,7 @@ const StatutesCard: React.FC<{ items: RelatedStatute[] }> = ({ items }) => {
                         ))
                     )}
                 </div>
-            )}
+            </div>
         </div>
     );
 };
@@ -158,12 +170,19 @@ const StatutesCard: React.FC<{ items: RelatedStatute[] }> = ({ items }) => {
 const ChecklistCard: React.FC<{
     items: ChecklistItem[];
     onToggle: (idx: number) => void;
-}> = ({ items, onToggle }) => {
-    const [expanded, setExpanded] = useState(true);
+    autoCollapsed?: boolean;
+    onExpand?: () => void;
+}> = ({ items, onToggle, autoCollapsed, onExpand }) => {
+    const [manualExpanded, setManualExpanded] = useState(true);
+    const isOpen = autoCollapsed ? false : manualExpanded;
+    const handleClick = () => {
+        if (autoCollapsed && onExpand) { onExpand(); return; }
+        setManualExpanded(!manualExpanded);
+    };
     const completed = items.filter((c) => c.completed).length;
     return (
         <div className={styles.card}>
-            <div className={styles.cardHeader} onClick={() => setExpanded(!expanded)}>
+            <div className={styles.cardHeader} onClick={handleClick}>
                 <div className={styles.cardTitle}>
                     <BiListCheck className={styles.cardIcon} />
                     <span>Case Checklist</span>
@@ -171,9 +190,9 @@ const ChecklistCard: React.FC<{
                         {completed}/{items.length}
                     </span>
                 </div>
-                {expanded ? <BiChevronUp /> : <BiChevronDown />}
+                {isOpen ? <BiChevronUp /> : <BiChevronDown />}
             </div>
-            {expanded && (
+            <div className={`${styles.cardBodyWrap} ${isOpen ? styles.cardBodyOpen : styles.cardBodyClosed}`}>
                 <div className={styles.cardBody}>
                     {items.map((c, i) => (
                         <label key={i} className={styles.checkRow}>
@@ -190,24 +209,29 @@ const ChecklistCard: React.FC<{
                         </label>
                     ))}
                 </div>
-            )}
+            </div>
         </div>
     );
 };
 
-const InfoGapsCard: React.FC<{ items: InfoGap[] }> = ({ items }) => {
-    const [expanded, setExpanded] = useState(true);
+const InfoGapsCard: React.FC<{ items: InfoGap[]; autoCollapsed?: boolean; onExpand?: () => void }> = ({ items, autoCollapsed, onExpand }) => {
+    const [manualExpanded, setManualExpanded] = useState(true);
+    const isOpen = autoCollapsed ? false : manualExpanded;
+    const handleClick = () => {
+        if (autoCollapsed && onExpand) { onExpand(); return; }
+        setManualExpanded(!manualExpanded);
+    };
     return (
         <div className={styles.card}>
-            <div className={styles.cardHeader} onClick={() => setExpanded(!expanded)}>
+            <div className={styles.cardHeader} onClick={handleClick}>
                 <div className={styles.cardTitle}>
                     <BiError className={styles.cardIcon} />
                     <span>Information Gaps</span>
                     <span className={styles.count}>{items.length}</span>
                 </div>
-                {expanded ? <BiChevronUp /> : <BiChevronDown />}
+                {isOpen ? <BiChevronUp /> : <BiChevronDown />}
             </div>
-            {expanded && (
+            <div className={`${styles.cardBodyWrap} ${isOpen ? styles.cardBodyOpen : styles.cardBodyClosed}`}>
                 <div className={styles.cardBody}>
                     {items.map((g, i) => (
                         <div key={i} className={styles.gapRow}>
@@ -221,7 +245,7 @@ const InfoGapsCard: React.FC<{ items: InfoGap[] }> = ({ items }) => {
                         </div>
                     ))}
                 </div>
-            )}
+            </div>
         </div>
     );
 };
@@ -231,6 +255,8 @@ const InfoGapsCard: React.FC<{ items: InfoGap[] }> = ({ items }) => {
 const ProactiveDashboard: React.FC<ProactiveDashboardProps> = ({
     baseUrl,
     latestQuery = '',
+    autoCollapsed = false,
+    onExpand,
 }) => {
     const [insights, setInsights] = useState<ProactiveInsights | null>(null);
     const [loading, setLoading] = useState(false);
@@ -313,10 +339,10 @@ const ProactiveDashboard: React.FC<ProactiveDashboardProps> = ({
 
             {insights && (
                 <div className={styles.grid}>
-                    <NextActionsCard items={insights.next_actions} />
-                    <StatutesCard items={insights.related_statutes} />
-                    <ChecklistCard items={checklist} onToggle={handleChecklistToggle} />
-                    <InfoGapsCard items={insights.info_gaps} />
+                    <NextActionsCard items={insights.next_actions} autoCollapsed={autoCollapsed} onExpand={onExpand} />
+                    <StatutesCard items={insights.related_statutes} autoCollapsed={autoCollapsed} onExpand={onExpand} />
+                    <ChecklistCard items={checklist} onToggle={handleChecklistToggle} autoCollapsed={autoCollapsed} onExpand={onExpand} />
+                    <InfoGapsCard items={insights.info_gaps} autoCollapsed={autoCollapsed} onExpand={onExpand} />
                 </div>
             )}
         </div>

@@ -137,6 +137,67 @@ const Search: React.FC = () => {
     
     // Ref to trigger the hidden file input
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const contentWrapperRef = useRef<HTMLDivElement>(null);
+    const [autoCollapsed, setAutoCollapsed] = useState(false);
+    const lockRef = useRef(false);
+
+    // Route all wheel events to the content wrapper
+    useEffect(() => {
+        const handleWheel = (event: WheelEvent) => {
+            const container = contentWrapperRef.current;
+            if (!container) return;
+            const maxScrollTop = container.scrollHeight - container.clientHeight;
+            if (maxScrollTop <= 0) return;
+            container.scrollTop = Math.min(
+                maxScrollTop,
+                Math.max(0, container.scrollTop + event.deltaY)
+            );
+            event.preventDefault();
+        };
+
+        window.addEventListener('wheel', handleWheel, { passive: false });
+        return () => window.removeEventListener('wheel', handleWheel);
+    }, []);
+
+    // Auto-collapse insights only when there's actually enough content
+    // to need scrolling, and the user has scrolled down.
+    useEffect(() => {
+        const wrapper = contentWrapperRef.current;
+        if (!wrapper) return;
+
+        const onScroll = () => {
+            if (lockRef.current) return;
+
+            const scrollTop = wrapper.scrollTop;
+            const hasOverflow = wrapper.scrollHeight > wrapper.clientHeight + 100;
+
+            setAutoCollapsed((prev) => {
+                if (!prev && hasOverflow && scrollTop > 80) {
+                    lockRef.current = true;
+                    setTimeout(() => { lockRef.current = false; }, 500);
+                    return true;
+                }
+                if (prev && scrollTop < 5) {
+                    lockRef.current = true;
+                    setTimeout(() => { lockRef.current = false; }, 500);
+                    return false;
+                }
+                return prev;
+            });
+        };
+
+        wrapper.addEventListener('scroll', onScroll, { passive: true });
+        return () => wrapper.removeEventListener('scroll', onScroll);
+    }, []);
+
+    const handleExpandInsights = () => {
+        const wrapper = contentWrapperRef.current;
+        if (!wrapper) return;
+        lockRef.current = true;
+        setAutoCollapsed(false);
+        wrapper.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(() => { lockRef.current = false; }, 600);
+    };
 
     const fetchFiles = async () => {
         try {
@@ -260,20 +321,22 @@ const Search: React.FC = () => {
                     <CiLogout /> Logout  
                 </button>
             </div>
-            <div className={styles.contentWrapper}>
+            <div className={styles.contentWrapper} ref={contentWrapperRef}>
+                {/* {messages.length === 0 && (
+                    <div className={styles.headerSection}>
+                        <h1 className={styles.mainTitle}>Legal Assistant</h1>
+                        <p className={styles.subtitle}>Ask me a legal question</p>
+                    </div>
+                )} */}
 
-                {messages.length === 0 && (
-                    <>
-                        <div className={styles.headerSection}>
-                            <h1 className={styles.mainTitle}>Legal Assistant</h1>
-                            <p className={styles.subtitle}>Ask me a legal question</p>
-                        </div>
-                        <ProactiveDashboard
-                            baseUrl={BASE_URL}
-                            latestQuery={lastAskedQuery}
-                        />
-                    </>
-                )}
+                <div className={styles.insightsSection}>
+                    <ProactiveDashboard
+                        baseUrl={BASE_URL}
+                        latestQuery={lastAskedQuery}
+                        autoCollapsed={autoCollapsed}
+                        onExpand={handleExpandInsights}
+                    />
+                </div>
 
                 <div className={styles.messageHistory}>
                   {messages.map((message) => (
