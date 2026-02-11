@@ -367,7 +367,7 @@ _insights_llm = ChatOllama(model="gemma3:4b", temperature=0.2, num_predict=1024)
 
 # Simple TTL cache: { user_id: { "ts": float, "data": dict } }
 _insights_cache: dict = {}
-_CACHE_TTL = 120  # seconds – serve cached result for 2 min
+_CACHE_TTL = 3600  # seconds – serve cached result for 1 hour
 
 
 def _extract_document_context(rag: RAGEngine, user_id, sample_limit: int = 6) -> str:
@@ -505,7 +505,7 @@ class InsightsRequest(BaseModel):
 
 
 @app.post("/proactive-insights")
-@limiter.limit("10/minute")
+@limiter.limit("2/minute")
 async def getProactiveInsights(
     request: Request,
     body: InsightsRequest,
