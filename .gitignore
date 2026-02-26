@@ -1,2 +1,12 @@
 /Backend/.env
 /Frontend/RAGapp/.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Chroma DB (local vector store)
+Backend/chroma_db/
+
+# Node
+node_modules/
