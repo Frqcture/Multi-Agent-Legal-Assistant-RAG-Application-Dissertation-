@@ -1,17 +1,26 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Search.module.css';
-import { BiArrowToRight, BiBook, BiLibrary, BiBot } from "react-icons/bi";
+import { BiArrowToRight, BiBook, BiLibrary } from "react-icons/bi";
+import { BiBrain, BiSearch, BiMessageDetail } from "react-icons/bi";
 import { CiLogout } from "react-icons/ci";
-import { FiX, FiTrash2 } from 'react-icons/fi';
-import { WorkflowTrigger } from '../Workflow/Workflow';
+import { FiX, FiTrash2, FiEye, FiEyeOff } from 'react-icons/fi';
 import ProactiveDashboard from './ProactiveDashboard';
 
 // Define the structure of a message
+interface AgentStep {
+    agent: string;
+    message: string;
+    timestamp: string;
+    tool_calls: Array<{ tool: string; args: Record<string, unknown> }>;
+    tool_results: Array<Record<string, unknown>>;
+}
+
 interface Message {
     id: number;
     text: string;
     sender: 'user' | 'bot';
+    steps?: AgentStep[];
 }
 
 interface AskRequest {
@@ -20,6 +29,8 @@ interface AskRequest {
 
 interface AskResponse {
     answer: string;
+    steps: AgentStep[];
+    status: string;
 }
 
 // --- API Helpers ---
@@ -89,7 +100,8 @@ async function askQuestion(question: string): Promise<Message | void> {
         return {
             id: Date.now(),
             text: result.answer,
-            sender: 'bot'
+            sender: 'bot',
+            steps: result.steps,
         };
     } catch (error) {
         console.error('Failed to fetch:', error);
@@ -129,7 +141,7 @@ const Search: React.FC = () => {
     const [inputValue, setInputValue] = useState<string>("");
     const [messages, setMessages] = useState<Message[]>([]);
     const [isIngesting, setIsIngesting] = useState<boolean>(false);
-    const [useAgentMode, setUseAgentMode] = useState<boolean>(false);
+    const [showSteps, setShowSteps] = useState<boolean>(true);
 
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
     const [userFiles, setUserFiles] = useState<string[]>([]);
@@ -309,10 +321,10 @@ const Search: React.FC = () => {
         <div className={styles.pageContainer}>
             <div className={styles.navbar}>
                 <button
-                    className={`${styles.navButton} ${useAgentMode ? styles.navButtonActive : ''}`}
-                    onClick={() => setUseAgentMode(!useAgentMode)}
+                    className={`${styles.navButton} ${showSteps ? styles.navButtonActive : ''}`}
+                    onClick={() => setShowSteps(!showSteps)}
                 >
-                  <BiBot /> {useAgentMode ? 'Agent Mode ON' : 'Agent Mode'}
+                  {showSteps ? <FiEye /> : <FiEyeOff />} {showSteps ? 'Steps Visible' : 'Steps Hidden'}
                 </button>
                 <button className={styles.navButton} onClick={handleOpenLibrary}>
                   <BiLibrary /> Library
@@ -343,6 +355,38 @@ const Search: React.FC = () => {
                     <div key={message.id} className={`${styles.messageRow} ${styles[message.sender]}`}>
                         <div className={styles.messageBubble}>
                           {message.text}
+                          {/* Inline agent steps */}
+                          {showSteps && message.steps && message.steps.length > 0 && (
+                            <div className={styles.stepsContainer}>
+                              {message.steps.map((step, idx) => {
+                                const iconMap: Record<string, React.ReactNode> = {
+                                    planner: <BiBrain />,
+                                    retriever: <BiSearch />,
+                                    responder: <BiMessageDetail />,
+                                };
+                                return (
+                                  <div key={idx} className={styles.stepItem}>
+                                    <div className={`${styles.stepIcon} ${styles[`step_${step.agent}`]}`}>
+                                      {iconMap[step.agent] ?? <BiSearch />}
+                                    </div>
+                                    <div className={styles.stepBody}>
+                                      <span className={styles.stepAgent}>{step.agent}</span>
+                                      <span className={styles.stepMessage}>{step.message}</span>
+                                      {step.tool_calls.length > 0 && (
+                                        <div className={styles.stepTools}>
+                                          {step.tool_calls.map((tc, i) => (
+                                            <span key={i} className={styles.toolCall}>
+                                              → {tc.tool}({Object.keys(tc.args).join(', ')})
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                     </div>
                   ))}
@@ -388,25 +432,6 @@ const Search: React.FC = () => {
                         </div>
                     </div>
                 </div>
-
-                {/* Multi-Agent Workflow Panel */}
-                {useAgentMode && inputValue.trim() && (
-                    <div style={{ marginTop: '1rem', width: '100%', maxWidth: '600px' }}>
-                        <WorkflowTrigger
-                            baseUrl={BASE_URL}
-                            question={inputValue}
-                            onComplete={(wf) => {
-                                if (wf.answer) {
-                                    setMessages(prev => [...prev, {
-                                        id: Date.now(),
-                                        text: `[Multi-Agent] ${wf.answer}`,
-                                        sender: 'bot'
-                                    }]);
-                                }
-                            }}
-                        />
-                    </div>
-                )}
             </div>
 
             {/* --- Library Modal Popup --- */}

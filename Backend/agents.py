@@ -169,6 +169,19 @@ class AgentCoordinator:
         # In-memory workflow store (use Redis/DB for production)
         self.workflows: Dict[str, WorkflowState] = {}
 
+    async def run_query(self, query: str, user_id: str) -> WorkflowState:
+        """Run the full agent pipeline synchronously and return the completed state."""
+        workflow_id = str(uuid.uuid4())
+        workflow = WorkflowState(
+            workflow_id=workflow_id,
+            query=query,
+            user_id=user_id,
+            status=WorkflowStatus.PENDING
+        )
+        self.workflows[workflow_id] = workflow
+        await self._run_workflow(workflow_id)
+        return workflow
+
     async def start_workflow(self, query: str, user_id: str) -> str:
         """Start a new workflow and return workflow ID."""
         workflow_id = str(uuid.uuid4())
