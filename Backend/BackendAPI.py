@@ -261,10 +261,19 @@ async def askQuestion(
     currentUser: User = Depends(getCurrentUser),
     csrf=Depends(_require_csrf)
 ):
-    """Query knowledge base with context filtering by user."""
+    """Query knowledge base using the multi-agent pipeline."""
     try:
-        answer = ragApp.query(queryRequest.question, userId=currentUser.id)
-        return {"answer": answer}
+        coordinator = get_coordinator()
+        workflow = await coordinator.run_query(
+            query=queryRequest.question,
+            user_id=str(currentUser.id)
+        )
+        result = workflow.to_dict()
+        return {
+            "answer": result.get("answer", "No answer generated."),
+            "steps": result.get("steps", []),
+            "status": result.get("status", "failed"),
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -378,85 +387,6 @@ async def deleteFile(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ============================================================================
-# Multi-Agent Workflow Endpoints (MCP-coordinated)
-# ============================================================================
-
-class WorkflowRequest(BaseModel):
-    question: str
-
-
-@app.post("/workflow/start")
-@limiter.limit("10/minute")
-async def startWorkflow(
-    request: Request,
-    workflowRequest: WorkflowRequest,
-    currentUser: User = Depends(getCurrentUser),
-    csrf=Depends(_require_csrf)
-):
-    """
-    Start an async multi-agent workflow.
-    Returns a workflow_id for polling status.
-    """
-    try:
-        coordinator = get_coordinator()
-        workflow_id = await coordinator.start_workflow(
-            query=workflowRequest.question,
-            user_id=str(currentUser.id)
-        )
-        return {
-            "workflow_id": workflow_id,
-            "status": "pending",
-            "message": "Workflow started. Poll /workflow/status/{workflow_id} for updates."
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/workflow/status/{workflow_id}")
-@limiter.limit("60/minute")
-async def getWorkflowStatus(
-    request: Request,
-    workflow_id: str,
-    currentUser: User = Depends(getCurrentUser)
-):
-    """
-    Poll workflow status and get step-by-step progress.
-    """
-    coordinator = get_coordinator()
-    workflow = coordinator.get_workflow(workflow_id)
-
-    if not workflow:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-
-    # Verify user owns this workflow
-    if workflow.user_id != str(currentUser.id):
-        raise HTTPException(status_code=403, detail="Not authorized to view this workflow")
-
-    return workflow.to_dict()
-
-
-@app.get("/workflow/list")
-@limiter.limit("20/minute")
-async def listWorkflows(
-    request: Request,
-    currentUser: User = Depends(getCurrentUser)
-):
-    """
-    List all workflows for the current user.
-    """
-    coordinator = get_coordinator()
-    user_workflows = [
-        w.to_dict() for w in coordinator.workflows.values()
-        if w.user_id == str(currentUser.id)
-    ]
-
-    # Sort by created_at descending
-    user_workflows.sort(key=lambda x: x["created_at"], reverse=True)
-
-    return {"workflows": user_workflows[:20]}  # Limit to last 20
 
 
 # ============================================================================
