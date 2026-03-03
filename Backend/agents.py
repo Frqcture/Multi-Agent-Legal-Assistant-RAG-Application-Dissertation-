@@ -285,7 +285,7 @@ class AgentCoordinator:
 
         # Minimum relevance threshold: Chroma returns L2/cosine distances where
         # lower = more similar. A score above this means the docs are a poor match.
-        RELEVANCE_THRESHOLD = 1.0
+        RELEVANCE_THRESHOLD = 1.5
 
         if search_result.get("success"):
             data = search_result.get("data", {})
