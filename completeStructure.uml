@@ -1,0 +1,214 @@
+@startuml Complete System Architecture
+
+top to bottom direction
+skinparam componentStyle rectangle
+skinparam linetype polyline
+skinparam nodesep 80
+skinparam ranksep 100
+skinparam backgroundColor #FFFFFF
+
+' ====================
+' LAYER 1: FRONTEND
+' ====================
+package "Frontend Layer (React + TypeScript + Vite)" {
+    
+    component [Login Component] as Login
+    component [Register Component] as Register
+    component [File Upload UI] as UploadUI
+    component [File List Display] as FileList
+    component [Search Box] as SearchBox
+    component [Agent Steps Display] as AgentSteps
+    component [Answer Display] as AnswerDisplay
+    component [Proactive Dashboard] as Dashboard
+    component [useAuth Hook] as useAuth
+}
+
+' ====================
+' LAYER 2: API GATEWAY
+' ====================
+package "FastAPI Backend (Python)" {
+    
+    interface "REST Endpoints" as REST
+    
+    component [Authentication\nEndpoints] as AuthEP
+    component [Document\nEndpoints] as DocEP
+    component [Query\nEndpoints] as QueryEP
+    component [Insights\nEndpoints] as InsightsEP
+    component [Middleware &\nDependencies] as Middleware
+    component [Helper\nFunctions] as Helpers
+    
+    note right of AuthEP
+        POST /register, /login, /logout
+        GET /me
+        Rate Limit: 5/min
+        JWT + CSRF tokens
+    end note
+    
+    note right of DocEP
+        POST /upload, /refresh
+        GET /files
+        DELETE /files/{filename}
+        Rate Limit: 5/min
+        Per-user isolation
+    end note
+}
+
+' ====================
+' LAYER 3A: DOCUMENT PROCESSING
+' ====================
+package "Document Ingestion System (ingest.py)" {
+    
+    component [Run Ingestion] as RunIngest
+    component [Format Extractors] as Extractors
+    component [OCR Pipeline] as OCR
+    component [File Management] as FileManager
+    
+    note right of OCR
+        3-tier fallback:
+        RapidOCR → Basic → Image OCR
+        Preprocessing with CLAHE
+    end note
+}
+
+' ====================
+' LAYER 3B: RAG ENGINE
+' ====================
+package "RAG Engine (index.py)" {
+    
+    component [RAG Engine] as RAGEngine
+    
+    note right of RAGEngine
+        LLM: gemma3:4b
+        Embeddings: embeddinggemma
+        User-filtered queries
+        1000-char chunks
+    end note
+}
+
+' ====================
+' LAYER 3C: MULTI-AGENT SYSTEM
+' ====================
+package "Multi-Agent System (MCP)" {
+    
+    component [Agent Coordinator] as AgentCoordinator
+    component [Workflow State] as WorkflowState
+    component [Agent Step] as AgentStep
+    component [MCP Server] as MCPServer
+    component [MCP Client] as MCPClient
+    component [MCP Tools] as MCPTools
+    
+    note right of AgentCoordinator
+        3-Agent Pipeline:
+        Planner → Retriever → Responder
+        Manages MCP subprocess
+    end note
+    
+    note right of MCPServer
+        JSON-RPC 2.0 over stdio
+        Tools: search_docs, list_user_docs,
+        get_doc_summary, answer_question
+    end note
+}
+
+' ====================
+' LAYER 4: DATA PERSISTENCE
+' ====================
+package "Data Layer" {
+    
+    database "SQLite\n(users.db)" as UserDB
+    database "ChromaDB\n(chroma_db/)" as ChromaDB
+    folder "Per-User Directories" as UserDocs
+    
+    note right of UserDB
+        Users: id, username, hashedPassword
+        Bcrypt + JWT authentication
+    end note
+    
+    note right of ChromaDB
+        Vector store with user_id filtering
+        Document chunks + embeddings
+        SQLite-backed persistence
+    end note
+}
+
+' ====================
+' EXTERNAL SERVICES
+' ====================
+cloud "Ollama Service\n(localhost:11434)" as Ollama
+
+note right of Ollama
+    Embeddings: embeddinggemma
+    LLM: gemma3:4b
+    Local inference
+end note
+
+' ====================
+' RELATIONSHIPS: Frontend to Backend
+' ====================
+
+Login -down-> REST : "POST /login"
+Register -down-> REST : "POST /register"
+useAuth -down-> REST : "GET /me"
+UploadUI -down-> REST : "POST /upload"
+FileList -down-> REST : "GET /files"
+SearchBox -down-> REST : "POST /ask"
+Dashboard -down-> REST : "POST /proactive-insights"
+
+' ====================
+' RELATIONSHIPS: API Layer
+' ====================
+
+REST -down- AuthEP
+REST -down- DocEP
+REST -down- QueryEP
+REST -down- InsightsEP
+
+AuthEP -right-> Middleware
+DocEP -right-> Middleware
+QueryEP -right-> Middleware
+InsightsEP -right-> Middleware
+
+' ====================
+' RELATIONSHIPS: Core Services
+' ====================
+
+AuthEP -down-> UserDB
+DocEP -down-> RunIngest
+DocEP -down-> RAGEngine
+QueryEP -down-> AgentCoordinator
+InsightsEP -down-> RAGEngine
+InsightsEP -down-> Ollama
+
+RunIngest -down-> Extractors
+Extractors -down-> OCR
+RunIngest -down-> ChromaDB
+UserDocs -down-> RunIngest
+
+RAGEngine -down-> Ollama
+RAGEngine -down-> ChromaDB
+
+AgentCoordinator -down-> MCPClient
+MCPClient -down-> MCPServer
+MCPServer -down-> RAGEngine
+
+' ====================
+' WORKFLOW ANNOTATIONS
+' ====================
+
+note bottom of RunIngest
+    Formats: PDF, DOCX, PPTX, TXT, Images
+    1000-char chunks with user isolation
+end note
+
+legend right
+    |= <b>Technology Stack</b> |
+    | <b>Frontend</b> | React 18 + TypeScript + Vite |
+    | <b>Backend</b> | FastAPI + Python 3 |
+    | <b>Authentication</b> | JWT + Bcrypt + CSRF |
+    | <b>Database</b> | SQLite (users) + ChromaDB (vectors) |
+    | <b>LLM Stack</b> | Ollama (gemma3:4b + embeddinggemma) |
+    | <b>Multi-Agent</b> | MCP (Model Context Protocol) |
+    | <b>OCR</b> | RapidOCR + Tesseract + OpenCV |
+endlegend
+
+@enduml

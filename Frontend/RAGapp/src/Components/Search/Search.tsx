@@ -2,9 +2,9 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Search.module.css';
 import { BiArrowToRight, BiBook, BiLibrary } from "react-icons/bi";
-import { BiBrain, BiSearch, BiMessageDetail } from "react-icons/bi";
+import { BiBrain, BiSearch, BiMessageDetail, BiWorld } from "react-icons/bi";
 import { CiLogout } from "react-icons/ci";
-import { FiX, FiTrash2, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiX, FiTrash2, FiEye, FiEyeOff, FiExternalLink } from 'react-icons/fi';
 import ProactiveDashboard from './ProactiveDashboard';
 
 // Define the structure of a message
@@ -16,11 +16,19 @@ interface AgentStep {
     tool_results: Array<Record<string, unknown>>;
 }
 
+interface WebSource {
+    title: string;
+    url: string;
+    snippet: string;
+}
+
 interface Message {
     id: number;
     text: string;
     sender: 'user' | 'bot';
     steps?: AgentStep[];
+    web_searched?: boolean;
+    web_sources?: WebSource[];
 }
 
 interface AskRequest {
@@ -31,6 +39,8 @@ interface AskResponse {
     answer: string;
     steps: AgentStep[];
     status: string;
+    web_searched?: boolean;
+    web_sources?: WebSource[];
 }
 
 // --- API Helpers ---
@@ -102,6 +112,8 @@ async function askQuestion(question: string): Promise<Message | void> {
             text: result.answer,
             sender: 'bot',
             steps: result.steps,
+            web_searched: result.web_searched ?? false,
+            web_sources: result.web_sources ?? [],
         };
     } catch (error) {
         console.error('Failed to fetch:', error);
@@ -355,6 +367,35 @@ const Search: React.FC = () => {
                     <div key={message.id} className={`${styles.messageRow} ${styles[message.sender]}`}>
                         <div className={styles.messageBubble}>
                           {message.text}
+                          {/* Web search indicator */}
+                          {message.web_searched && (
+                            <div className={styles.webSearchBanner}>
+                                <div className={styles.webSearchHeader}>
+                                    <BiWorld className={styles.webSearchIcon} />
+                                    <span>Answer sourced from web search — your documents did not contain this information</span>
+                                </div>
+                                {message.web_sources && message.web_sources.length > 0 && (
+                                    <ul className={styles.webSourceList}>
+                                        {message.web_sources.map((src, i) => (
+                                            <li key={i} className={styles.webSourceItem}>
+                                                <a
+                                                    href={src.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className={styles.webSourceLink}
+                                                >
+                                                    {src.title || src.url}
+                                                    <FiExternalLink className={styles.webSourceExtIcon} />
+                                                </a>
+                                                {src.snippet && (
+                                                    <span className={styles.webSourceSnippet}>{src.snippet}</span>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                          )}
                           {/* Inline agent steps */}
                           {showSteps && message.steps && message.steps.length > 0 && (
                             <div className={styles.stepsContainer}>

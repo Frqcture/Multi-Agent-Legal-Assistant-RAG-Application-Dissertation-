@@ -1,0 +1,64 @@
+@startuml Simple System Architecture
+
+!define RECTANGLE class
+
+skinparam componentStyle rectangle
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+
+' Frontend Layer
+package "Frontend (React + TypeScript)" {
+    [Login/Register\nComponent] as Auth
+    [Search/Query\nComponent] as Search
+    [File Upload\nComponent] as Upload
+    [Proactive Dashboard\nComponent] as Dashboard
+}
+
+' Backend API Layer
+package "FastAPI Backend" {
+    [Authentication\nEndpoints] as AuthAPI
+    [Document Management\nEndpoints] as DocAPI
+    [Query Processing\nEndpoints] as QueryAPI
+    [Insights\nEndpoints] as InsightsAPI
+}
+
+' Core Services Layer
+package "Core Services" {
+    database "SQLite\nUser Database" as DB
+    [RAG Engine\n(LLM + Embeddings)] as RAG
+    [Document Ingestion\n(Multi-format + OCR)] as Ingest
+    [Multi-Agent System\n(MCP Server)] as MCP
+    database "ChromaDB\nVector Store" as VectorDB
+}
+
+' Frontend to Backend API Calls
+Auth --> AuthAPI : POST /login\nPOST /register\nPOST /logout
+Search --> QueryAPI : POST /ask\nGET /files
+Upload --> DocAPI : POST /upload\nDELETE /files/{filename}
+Dashboard --> InsightsAPI : POST /proactive-insights
+
+' Backend to Services
+AuthAPI --> DB : User Authentication
+DocAPI --> Ingest : Process Documents
+DocAPI --> VectorDB : Store/Delete Chunks
+QueryAPI --> MCP : Multi-Agent Query
+QueryAPI --> RAG : Semantic Search
+InsightsAPI --> RAG : Extract Context
+InsightsAPI --> RAG : Generate Insights
+Ingest --> VectorDB : Store Embeddings
+MCP --> RAG : Tool Calls
+MCP --> VectorDB : Search Documents
+
+note right of MCP
+  Coordinates 3 agents:
+  • Planner
+  • Retriever
+  • Responder
+end note
+
+note bottom of VectorDB
+  User isolation via
+  user_id metadata
+end note
+
+@enduml

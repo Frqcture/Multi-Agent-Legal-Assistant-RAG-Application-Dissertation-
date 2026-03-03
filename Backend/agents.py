@@ -62,6 +62,8 @@ class WorkflowState:
     error: Optional[str] = None
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     completed_at: Optional[str] = None
+    used_web_search: bool = False
+    web_sources: List[Dict] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
         return {
@@ -73,7 +75,9 @@ class WorkflowState:
             "answer": self.answer,
             "error": self.error,
             "created_at": self.created_at,
-            "completed_at": self.completed_at
+            "completed_at": self.completed_at,
+            "used_web_search": self.used_web_search,
+            "web_sources": self.web_sources,
         }
 
 
@@ -235,14 +239,13 @@ class AgentCoordinator:
             await self.mcp_client.stop()
 
     async def _run_planner(self, workflow: WorkflowState):
-        """Planner agent: Analyze query and plan tool usage."""
+        """Planner agent: List available docs and set a plan without an LLM call."""
         step = AgentStep(
             agent=AgentRole.PLANNER,
-            message="Analyzing query and planning approach..."
+            message="Analysing available documents..."
         )
         workflow.steps.append(step)
 
-        # Get available docs to inform planning
         docs_result = await self.mcp_client.call_tool("list_user_docs", {
             "user_id": workflow.user_id
         })
@@ -252,25 +255,12 @@ class AgentCoordinator:
 
         if docs_result.get("success"):
             files = docs_result.get("data", {}).get("files", [])
-            file_list = ", ".join(files) if files else "No documents found"
-
-            # Use LLM to create a plan
-            plan_prompt = f"""You are a planning agent. Analyze this query and create a brief plan.
-
-Query: {workflow.query}
-Available documents: {file_list}
-
-Create a 1-2 sentence plan for how to answer this query using the available documents.
-Focus on what to search for and how to structure the answer."""
-
-            plan_response = self.llm.invoke([
-                SystemMessage(content="You are a concise planning agent."),
-                HumanMessage(content=plan_prompt)
-            ])
-
-            step.message = f"Plan: {plan_response.content}"
+            if files:
+                step.message = f"Plan: search {len(files)} document(s) — {', '.join(files)}"
+            else:
+                step.message = "Plan: no documents found — will fall back to web search."
         else:
-            step.message = "Plan: Will search documents and synthesize an answer."
+            step.message = "Plan: will search documents and synthesise an answer."
 
     async def _run_retriever(self, workflow: WorkflowState):
         """Retriever agent: Search for relevant information."""
@@ -293,67 +283,152 @@ Focus on what to search for and how to structure the answer."""
         })
         step.tool_results.append(search_result)
 
+        # Minimum relevance threshold: Chroma returns L2/cosine distances where
+        # lower = more similar. A score above this means the docs are a poor match.
+        RELEVANCE_THRESHOLD = 1.5
+
         if search_result.get("success"):
             data = search_result.get("data", {})
             num_results = data.get("num_results", 0)
             chunks = data.get("chunks", [])
+            best_score = data.get("best_score")
 
-            # Summarize what was found
-            sources = set()
-            for chunk in chunks:
-                sources.add(f"{chunk.get('source', 'Unknown')} (p.{chunk.get('page', '?')})")
+            doc_is_relevant = (
+                num_results > 0
+                and best_score is not None
+                and best_score < RELEVANCE_THRESHOLD
+            )
 
-            step.message = f"Found {num_results} relevant chunks from: {', '.join(sources)}"
-
-            # Store context for responder
-            workflow._retrieved_context = chunks
+            if doc_is_relevant:
+                sources = set()
+                for chunk in chunks:
+                    sources.add(f"{chunk.get('source', 'Unknown')} (p.{chunk.get('page', '?')})")
+                step.message = (
+                    f"Found {num_results} relevant chunks from: {', '.join(sources)} "
+                    f"(best score: {best_score:.3f})"
+                )
+                workflow._retrieved_context = chunks
+            else:
+                score_info = f" (best score: {best_score:.3f})" if best_score is not None else ""
+                step.message = (
+                    f"Documents did not contain sufficiently relevant information{score_info}. "
+                    "Falling back to web search..."
+                )
+                workflow._retrieved_context = []
+                await self._run_web_search_fallback(workflow, step)
         else:
-            step.message = "No relevant information found in documents."
+            step.message = "Document search failed. Falling back to web search..."
+            workflow._retrieved_context = []
+            await self._run_web_search_fallback(workflow, step)
+
+    async def _run_web_search_fallback(self, workflow: WorkflowState, retriever_step: AgentStep):
+        """Fallback to web search directly (not via MCP subprocess) using a thread
+        executor so the synchronous DDGS call never blocks the asyncio event loop.
+        """
+        retriever_step.tool_calls.append({
+            "tool": "search_web",
+            "args": {"query": workflow.query}
+        })
+
+        try:
+            from ddgs import DDGS
+
+            loop = asyncio.get_event_loop()
+            raw = await loop.run_in_executor(
+                None,
+                lambda: list(DDGS().text(workflow.query, max_results=5))
+            )
+
+            results = [
+                {
+                    "title": r.get("title", ""),
+                    "url": r.get("href", ""),
+                    "snippet": r.get("body", "")[:400],
+                }
+                for r in (raw or [])
+            ]
+
+            tool_result = {"success": True, "num_results": len(results), "results": results}
+            retriever_step.tool_results.append(tool_result)
+
+            if results:
+                workflow.used_web_search = True
+                workflow.web_sources = results
+                workflow._retrieved_context = [
+                    {
+                        "content": r.get("snippet", ""),
+                        "source": r.get("title", "Web"),
+                        "page": r.get("url", ""),
+                        "is_web": True,
+                    }
+                    for r in results
+                ]
+                retriever_step.message += f" Web search returned {len(results)} results."
+            else:
+                retriever_step.tool_results.append({"success": False, "error": "No web results returned"})
+                retriever_step.message += " Web search returned no results."
+                workflow._retrieved_context = []
+
+        except ImportError:
+            retriever_step.tool_results.append({"success": False, "error": "duckduckgo_search not installed"})
+            retriever_step.message += " Web search unavailable (package missing)."
+            workflow._retrieved_context = []
+        except Exception as e:
+            retriever_step.tool_results.append({"success": False, "error": str(e)})
+            retriever_step.message += f" Web search failed: {e}"
             workflow._retrieved_context = []
 
     async def _run_responder(self, workflow: WorkflowState):
-        """Responder agent: Generate final answer with citations."""
+        """Responder agent: Generate final answer using already-retrieved context."""
         step = AgentStep(
             agent=AgentRole.RESPONDER,
             message="Generating response with citations..."
         )
         workflow.steps.append(step)
 
-        # Use MCP tool to generate answer
-        answer_result = await self.mcp_client.call_tool("answer_question", {
-            "question": workflow.query,
-            "user_id": workflow.user_id
-        })
+        context = getattr(workflow, "_retrieved_context", [])
 
-        step.tool_calls.append({
-            "tool": "answer_question",
-            "args": {"question": workflow.query}
-        })
-        step.tool_results.append(answer_result)
+        if not context:
+            workflow.answer = "I couldn't find relevant information in your documents or on the web to answer this question."
+            step.message = "No context available for response."
+            return
 
-        if answer_result.get("success"):
-            answer = answer_result.get("data", {}).get("answer", "")
-            workflow.answer = answer
-            step.message = "Response generated with citations."
+        is_web = any(c.get("is_web") for c in context)
+
+        if is_web:
+            context_text = "\n\n".join([
+                f"[Web: {c.get('source', 'Unknown')} – {c.get('page', '')}]: {c.get('content', '')}"
+                for c in context
+            ])
+            web_note = (
+                "\n\n---\n"
+                "**Note:** Your uploaded documents did not contain sufficient information to answer this query. "
+                "The above answer was generated using a live web search."
+            )
+            system_prompt = (
+                "You are a helpful legal assistant. "
+                "The user's documents did not contain the answer, so web search results are provided instead. "
+                "Answer clearly and cite each source as [Source Name](URL)."
+            )
         else:
-            # Fallback: use LLM directly with retrieved context
-            context = getattr(workflow, "_retrieved_context", [])
-            if context:
-                context_text = "\n\n".join([
-                    f"[{c.get('source', 'Unknown')}, p.{c.get('page', '?')}]: {c.get('content', '')}"
-                    for c in context
-                ])
+            context_text = "\n\n".join([
+                f"--- SOURCE: [{c.get('source', 'Unknown')}, Page {c.get('page', '?')}] ---\n{c.get('content', '')}"
+                for c in context
+            ])
+            web_note = ""
+            system_prompt = (
+                "You are a helpful legal assistant that answers questions strictly using the provided context. "
+                "Every claim must be followed by a reference: [document_name, page_number]. "
+                "If the context doesn't contain the answer, say so."
+            )
 
-                response = self.llm.invoke([
-                    SystemMessage(content="You are a helpful assistant. Answer based on the context provided. Cite sources."),
-                    HumanMessage(content=f"Context:\n{context_text}\n\nQuestion: {workflow.query}")
-                ])
+        response = self.llm.invoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"Context:\n{context_text}\n\nQuestion: {workflow.query}")
+        ])
 
-                workflow.answer = response.content
-                step.message = "Response generated from retrieved context."
-            else:
-                workflow.answer = "I couldn't find relevant information in your documents to answer this question."
-                step.message = "No context available for response."
+        workflow.answer = response.content + web_note
+        step.message = "Response generated from web search results." if is_web else "Response generated with citations."
 
 
 # Singleton coordinator instance

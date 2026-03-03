@@ -76,8 +76,9 @@
     background-color: #141414;
     border: 1px solid #252525;
     border-radius: 16px;
-    overflow: hidden;
+    overflow: visible;
     transition: border-color 0.2s;
+    position: relative;
 }
 
 .card:hover {
@@ -214,7 +215,11 @@
     border-radius: 10px;
     background: #1a1a1a;
 }
-
+.statuteRowHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
 .statuteName {
     font-size: 0.88rem;
     color: #82b1ff;
@@ -339,4 +344,40 @@
     100% {
         background-position: -200% 0;
     }
+}
+
+/* ── Info Tooltip ────────────────────────────────────────────────────── */
+.infoTip {
+    display: inline-flex;
+    align-items: center;
+    color: #555;
+    font-size: 0.85rem;
+    cursor: default;
+    flex-shrink: 0;
+    margin-left: auto;
+    transition: color 0.15s;
+}
+
+.infoTip:hover {
+    color: #5dade2;
+}
+
+/* Portal tooltip — rendered into document.body, escapes all overflow clipping */
+.infoTipPortal {
+    position: fixed;
+    transform: translate(-50%, calc(-100% - 10px));
+    background: #1e2a38;
+    color: #c8d8e8;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid #2a3f52;
+    white-space: normal;
+    width: 220px;
+    max-width: 220px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    z-index: 9999;
+    text-align: left;
 }

@@ -273,6 +273,8 @@ async def askQuestion(
             "answer": result.get("answer", "No answer generated."),
             "steps": result.get("steps", []),
             "status": result.get("status", "failed"),
+            "web_searched": result.get("used_web_search", False),
+            "web_sources": result.get("web_sources", []),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -401,8 +403,8 @@ _insights_llm = ChatOllama(model="gemma3:4b", temperature=0.2, num_predict=1024)
 
 # Simple TTL cache: { user_id: { "ts": float, "data": dict } }
 _insights_cache: dict = {}
-_CACHE_TTL = 3600  # seconds – serve cached result for 1 hour
-
+# _CACHE_TTL = 3600  # seconds – serve cached result for 1 hour
+_CACHE_TTL = 120
 
 def _extract_document_context(rag: RAGEngine, user_id, sample_limit: int = 6) -> str:
     """Pull representative chunks from user documents for analysis."""
@@ -480,16 +482,16 @@ Documents:
 Return this exact JSON structure:
 {{
   "next_actions": [
-    {{"action": "...", "priority": "high|medium|low", "reason": "..."}}
+    {{"action": "...", "priority": "high|medium|low", "reason": "...", "shown_because": "Brief explanation of why this action is relevant to these documents"}}
   ],
   "related_statutes": [
-    {{"statute": "...", "relevance": "...", "jurisdiction": "..."}}
+    {{"statute": "...", "relevance": "...", "jurisdiction": "...", "shown_because": "Brief explanation of why this statute was surfaced from documents"}}
   ],
   "checklist": [
-    {{"item": "...", "completed": false, "category": "Intake|Filing|Evidence|General"}}
+    {{"item": "...", "completed": false, "category": "Intake|Filing|Evidence|General", "shown_because": "Brief explanation of why this checklist item applies"}}
   ],
   "info_gaps": [
-    {{"field": "...", "severity": "high|medium|low", "suggestion": "..."}}
+    {{"field": "...", "severity": "high|medium|low", "suggestion": "...", "shown_because": "Brief explanation of why this information gap was identified"}}
   ]
 }}
 
@@ -498,14 +500,15 @@ Rules:
 - related_statutes: 3-4 items
 - checklist: 4-6 items
 - info_gaps: 3-4 items
+- shown_because: 1 short sentence explaining why this insight was surfaced for these specific documents
 - Return ONLY the JSON object, nothing else."""
 
 
 _EMPTY_INSIGHTS = {
-    "next_actions": [{"action": "Upload case documents to get started", "priority": "high", "reason": "No documents found"}],
+    "next_actions": [{"action": "Upload case documents to get started", "priority": "high", "reason": "No documents found", "shown_because": "No documents have been uploaded yet"}],
     "related_statutes": [],
-    "checklist": [{"item": "Upload case documents", "completed": False, "category": "Setup"}],
-    "info_gaps": [{"field": "Client documents", "severity": "high", "suggestion": "Upload relevant case files to begin analysis."}],
+    "checklist": [{"item": "Upload case documents", "completed": False, "category": "Setup", "shown_because": "Required before analysis can begin"}],
+    "info_gaps": [{"field": "Client documents", "severity": "high", "suggestion": "Upload relevant case files to begin analysis.", "shown_because": "No documents are currently in your knowledge base"}],
 }
 
 
