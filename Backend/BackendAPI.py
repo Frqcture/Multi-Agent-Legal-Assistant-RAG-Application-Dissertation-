@@ -399,7 +399,7 @@ import json as _json
 import time as _time
 
 # Shared LLM instance for proactive analysis
-_insights_llm = ChatOllama(model="gemma3:4b", temperature=0.2, num_predict=1024)
+_insights_llm = ChatOllama(model="gemma3:4b", temperature=0.2, num_predict=2048)
 
 # Simple TTL cache: { user_id: { "ts": float, "data": dict } }
 _insights_cache: dict = {}
@@ -560,17 +560,24 @@ _EMPTY_INSIGHTS = {
 
 
 async def _generate_all_insights(context: str, query: str) -> dict:
-    """Single LLM call that produces all four insight sections."""
+    """Single LLM call that produces all six insight sections."""
     if not context:
         return _EMPTY_INSIGHTS
 
     query_line = f"Current query context: {query}" if query else ""
     prompt = _COMBINED_PROMPT.format(context=context, query_line=query_line)
 
-    resp = await _insights_llm.ainvoke([
-        SystemMessage(content=_COMBINED_SYSTEM),
-        HumanMessage(content=prompt),
-    ])
+    try:
+        resp = await asyncio.wait_for(
+            _insights_llm.ainvoke([
+                SystemMessage(content=_COMBINED_SYSTEM),
+                HumanMessage(content=prompt),
+            ]),
+            timeout=120,  # 2 min hard cap
+        )
+    except asyncio.TimeoutError:
+        logging.warning("Insights LLM timed out after 120s")
+        return _EMPTY_INSIGHTS
 
     parsed = _parse_combined_response(resp.content)
 

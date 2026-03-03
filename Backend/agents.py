@@ -269,10 +269,13 @@ class AgentCoordinator:
         )
 
         try:
-            classification = await self.planner_llm.ainvoke([
-                SystemMessage(content="You classify user queries. Respond ONLY with valid JSON."),
-                HumanMessage(content=classification_prompt),
-            ])
+            classification = await asyncio.wait_for(
+                self.planner_llm.ainvoke([
+                    SystemMessage(content="You classify user queries. Respond ONLY with valid JSON."),
+                    HumanMessage(content=classification_prompt),
+                ]),
+                timeout=15,  # short timeout – fall back to normal query if slow
+            )
 
             import re
             json_match = re.search(r'\{[^}]+\}', classification.content)
@@ -281,8 +284,8 @@ class AgentCoordinator:
                 if parsed.get("intent") == "draft":
                     workflow.is_draft_request = True
                     workflow.draft_type = parsed.get("draft_type", "legal document")
-        except Exception:
-            pass  # Default to normal query if classification fails
+        except (asyncio.TimeoutError, Exception):
+            pass  # Default to normal query if classification fails or times out
 
         docs_result = await self.mcp_client.call_tool("list_user_docs", {
             "user_id": workflow.user_id
