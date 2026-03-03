@@ -63,26 +63,29 @@ class MCPServer:
             except ValueError:
                 user_id_int = user_id
 
-            # Search with user filter
-            results = vectorstore.similarity_search(
+            # Search with user filter, returning relevance scores
+            results_with_scores = vectorstore.similarity_search_with_score(
                 query,
                 k=top_k,
                 filter={"user_id": user_id_int}
             )
 
             chunks = []
-            for doc in results:
+            for doc, score in results_with_scores:
                 chunks.append({
                     "content": doc.page_content[:500],  # Truncate for response
                     "source": doc.metadata.get("document_name", "Unknown"),
                     "page": doc.metadata.get("page_number", "?"),
-                    "score": getattr(doc, "score", None)
+                    "score": float(score)
                 })
+
+            best_score = min((c["score"] for c in chunks), default=None)
 
             return ToolResult(True, {
                 "query": query,
                 "num_results": len(chunks),
-                "chunks": chunks
+                "chunks": chunks,
+                "best_score": best_score
             })
 
         except Exception as e:
@@ -189,13 +192,43 @@ class MCPServer:
         except Exception as e:
             return ToolResult(False, None, str(e))
 
+    async def handle_search_web(self, params: Dict) -> ToolResult:
+        """Search the web using DuckDuckGo when documents are insufficient."""
+        query = params.get("query", "")
+        max_results = params.get("max_results", 5)
+
+        if not query:
+            return ToolResult(False, None, "Missing required parameter: query")
+
+        try:
+            from duckduckgo_search import DDGS
+            raw_results = DDGS().text(query, max_results=max_results)
+            results = [
+                {
+                    "title": r.get("title", ""),
+                    "url": r.get("href", ""),
+                    "snippet": r.get("body", "")[:400]
+                }
+                for r in (raw_results or [])
+            ]
+            return ToolResult(True, {
+                "query": query,
+                "num_results": len(results),
+                "results": results
+            })
+        except ImportError:
+            return ToolResult(False, None, "duckduckgo_search package not installed. Run: pip install duckduckgo-search")
+        except Exception as e:
+            return ToolResult(False, None, f"Web search failed: {str(e)}")
+
     async def call_tool(self, tool_name: str, params: Dict) -> ToolResult:
         """Route tool call to appropriate handler."""
         handlers = {
             "search_docs": self.handle_search_docs,
             "list_user_docs": self.handle_list_user_docs,
             "get_doc_summary": self.handle_get_doc_summary,
-            "answer_question": self.handle_answer_question
+            "answer_question": self.handle_answer_question,
+            "search_web": self.handle_search_web,
         }
 
         handler = handlers.get(tool_name)

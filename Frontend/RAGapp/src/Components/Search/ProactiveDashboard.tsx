@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import styles from './ProactiveDashboard.module.css';
 import {
     BiTargetLock,
@@ -8,6 +9,7 @@ import {
     BiRefresh,
     BiChevronDown,
     BiChevronUp,
+    BiInfoCircle,
 } from 'react-icons/bi';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -16,24 +18,28 @@ interface NextAction {
     action: string;
     priority: 'high' | 'medium' | 'low';
     reason: string;
+    shown_because?: string;
 }
 
 interface RelatedStatute {
     statute: string;
     relevance: string;
     jurisdiction: string;
+    shown_because?: string;
 }
 
 interface ChecklistItem {
     item: string;
     completed: boolean;
     category: string;
+    shown_because?: string;
 }
 
 interface InfoGap {
     field: string;
     severity: 'high' | 'medium' | 'low';
     suggestion: string;
+    shown_because?: string;
 }
 
 interface ProactiveInsights {
@@ -93,6 +99,46 @@ const priorityBadge: Record<string, string> = {
     low: styles.badgeLow,
 };
 
+// ── Tooltip helper ────────────────────────────────────────────────────────
+
+const InfoTip: React.FC<{ text?: string }> = ({ text }) => {
+    const [visible, setVisible] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0 });
+    const iconRef = useRef<HTMLSpanElement>(null);
+
+    if (!text) return null;
+
+    const handleMouseEnter = () => {
+        if (iconRef.current) {
+            const rect = iconRef.current.getBoundingClientRect();
+            setCoords({ top: rect.top, left: rect.left + rect.width / 2 });
+            setVisible(true);
+        }
+    };
+
+    return (
+        <>
+            <span
+                ref={iconRef}
+                className={styles.infoTip}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={() => setVisible(false)}
+            >
+                <BiInfoCircle />
+            </span>
+            {visible && ReactDOM.createPortal(
+                <div
+                    className={styles.infoTipPortal}
+                    style={{ top: coords.top, left: coords.left }}
+                >
+                    {text}
+                </div>,
+                document.body
+            )}
+        </>
+    );
+};
+
 // ── Sub‑components ─────────────────────────────────────────────────────────
 
 const NextActionsCard: React.FC<{ items: NextAction[]; autoCollapsed?: boolean; onExpand?: () => void }> = ({ items, autoCollapsed, onExpand }) => {
@@ -123,6 +169,7 @@ const NextActionsCard: React.FC<{ items: NextAction[]; autoCollapsed?: boolean; 
                                 <span className={styles.actionLabel}>{a.action}</span>
                                 <span className={styles.actionReason}>{a.reason}</span>
                             </div>
+                            <InfoTip text={a.shown_because} />
                         </div>
                     ))}
                 </div>
@@ -155,7 +202,10 @@ const StatutesCard: React.FC<{ items: RelatedStatute[]; autoCollapsed?: boolean;
                     ) : (
                         items.map((s, i) => (
                             <div key={i} className={styles.statuteRow}>
-                                <span className={styles.statuteName}>{s.statute}</span>
+                                <div className={styles.statuteRowHeader}>
+                                    <span className={styles.statuteName}>{s.statute}</span>
+                                    <InfoTip text={s.shown_because} />
+                                </div>
                                 <span className={styles.statuteRelevance}>{s.relevance}</span>
                                 <span className={styles.statuteJurisdiction}>{s.jurisdiction}</span>
                             </div>
@@ -206,6 +256,7 @@ const ChecklistCard: React.FC<{
                                 {c.item}
                             </span>
                             <span className={styles.categoryTag}>{c.category}</span>
+                            <InfoTip text={c.shown_because} />
                         </label>
                     ))}
                 </div>
@@ -242,6 +293,7 @@ const InfoGapsCard: React.FC<{ items: InfoGap[]; autoCollapsed?: boolean; onExpa
                                 <span className={styles.gapField}>{g.field}</span>
                                 <span className={styles.gapSuggestion}>{g.suggestion}</span>
                             </div>
+                            <InfoTip text={g.shown_because} />
                         </div>
                     ))}
                 </div>

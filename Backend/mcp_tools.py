@@ -80,6 +80,15 @@ TOOL_DEFINITIONS = [
             "context": {"type": "string", "description": "Optional additional context", "default": ""}
         },
         required=["question", "user_id"]
+    ),
+    ToolDefinition(
+        name="search_web",
+        description="Search the web for information when user documents don't contain the answer. Returns a list of web results with titles, URLs, and snippets.",
+        parameters={
+            "query": {"type": "string", "description": "The search query"},
+            "max_results": {"type": "integer", "description": "Maximum number of results to return", "default": 5}
+        },
+        required=["query"]
     )
 ]
 
