@@ -461,17 +461,34 @@ def _parse_combined_response(text: str) -> dict:
             pass
 
     # Fallback: extract each section individually
-    return {
+    result = {
         "next_actions": _parse_json_block(text, "next_actions"),
         "related_statutes": _parse_json_block(text, "related_statutes"),
         "checklist": _parse_json_block(text, "checklist"),
         "info_gaps": _parse_json_block(text, "info_gaps"),
+        "deadlines": _parse_json_block(text, "deadlines"),
+        "conflicts": _parse_json_block(text, "conflicts"),
     }
+    # Try to extract section_relevance and jurisdiction
+    import re as _re
+    sr_match = _re.search(r'"section_relevance"\s*:\s*(\{[^}]+\})', text, _re.DOTALL)
+    if sr_match:
+        try:
+            result["section_relevance"] = _json.loads(sr_match.group(1))
+        except _json.JSONDecodeError:
+            pass
+    jr_match = _re.search(r'"jurisdiction"\s*:\s*(\{[^}]+\})', text, _re.DOTALL)
+    if jr_match:
+        try:
+            result["jurisdiction"] = _json.loads(jr_match.group(1))
+        except _json.JSONDecodeError:
+            pass
+    return result
 
 
 _COMBINED_SYSTEM = "You are a legal-clinic case advisor. Respond ONLY with valid JSON. No markdown, no explanation."
 
-_COMBINED_PROMPT = """Analyse these legal documents and return a SINGLE JSON object with exactly 4 keys.
+_COMBINED_PROMPT = """Analyse these legal documents and return a SINGLE JSON object with exactly 6 keys.
 Be concise. Keep strings short (under 15 words each).
 
 Documents:
@@ -492,7 +509,22 @@ Return this exact JSON structure:
   ],
   "info_gaps": [
     {{"field": "...", "severity": "high|medium|low", "suggestion": "...", "shown_because": "Brief explanation of why this information gap was identified"}}
-  ]
+  ],
+  "deadlines": [
+    {{"title": "...", "date": "YYYY-MM-DD", "source": "document or statute name", "urgency": "high|medium|low", "description": "Brief description of the deadline", "shown_because": "Why this deadline was identified"}}
+  ],
+  "conflicts": [
+    {{"party_name": "...", "documents": ["doc1.pdf", "doc2.pdf"], "conflict_type": "opposing_party|shared_party|witness_overlap", "severity": "high|medium|low", "description": "Brief description of the potential conflict", "shown_because": "Why this conflict was flagged"}}
+  ],
+  "section_relevance": {{
+    "next_actions": 0.0,
+    "related_statutes": 0.0,
+    "checklist": 0.0,
+    "info_gaps": 0.0,
+    "deadlines": 0.0,
+    "conflicts": 0.0
+  }},
+  "jurisdiction": {{"name": "...", "confidence": "high|medium|low", "detected_from": "Brief explanation of how jurisdiction was determined"}}
 }}
 
 Rules:
@@ -500,6 +532,10 @@ Rules:
 - related_statutes: 3-4 items
 - checklist: 4-6 items
 - info_gaps: 3-4 items
+- deadlines: 2-4 items. Extract any statutory deadlines, limitation periods, filing windows, court dates, or compliance deadlines mentioned or implied in documents. Use actual dates if found, otherwise estimate from context. If no deadlines found, return empty array.
+- conflicts: 1-3 items. Cross-reference ALL party names, organisations, and individuals across ALL uploaded documents. Flag where the same party appears on different sides, a witness is also a party, or any potential conflict of interest exists. If none found, return empty array.
+- section_relevance: A score from 0.0 to 1.0 for each section indicating how relevant/useful it is for these specific documents. Higher means more relevant. Base this on how much actionable content each section contains.
+- jurisdiction: Detect the jurisdiction from document content (court names, statute references, addresses, legal terminology). Use "Unknown" if unclear.
 - shown_because: 1 short sentence explaining why this insight was surfaced for these specific documents
 - Return ONLY the JSON object, nothing else."""
 
@@ -509,6 +545,17 @@ _EMPTY_INSIGHTS = {
     "related_statutes": [],
     "checklist": [{"item": "Upload case documents", "completed": False, "category": "Setup", "shown_because": "Required before analysis can begin"}],
     "info_gaps": [{"field": "Client documents", "severity": "high", "suggestion": "Upload relevant case files to begin analysis.", "shown_because": "No documents are currently in your knowledge base"}],
+    "deadlines": [],
+    "conflicts": [],
+    "section_relevance": {
+        "next_actions": 0.8,
+        "related_statutes": 0.2,
+        "checklist": 0.7,
+        "info_gaps": 0.6,
+        "deadlines": 0.1,
+        "conflicts": 0.1,
+    },
+    "jurisdiction": {"name": "Unknown", "confidence": "low", "detected_from": "No documents uploaded"},
 }
 
 
@@ -529,11 +576,37 @@ async def _generate_all_insights(context: str, query: str) -> dict:
 
     # Fill in defaults for any missing sections
     defaults = _EMPTY_INSIGHTS
+
+    # Build section relevance scores
+    raw_relevance = parsed.get("section_relevance", {})
+    section_keys = ["next_actions", "related_statutes", "checklist", "info_gaps", "deadlines", "conflicts"]
+    section_relevance = {}
+    for k in section_keys:
+        try:
+            section_relevance[k] = float(raw_relevance.get(k, 0.5))
+        except (TypeError, ValueError):
+            section_relevance[k] = 0.5
+
+    # Boost score for sections that actually have content
+    result_sections = {}
+    for k in section_keys:
+        items = parsed.get(k) or defaults.get(k, [])
+        result_sections[k] = items
+        if not items:
+            section_relevance[k] = max(0.0, section_relevance[k] - 0.3)
+
+    # Sort sections by relevance and pick top 4
+    ranked = sorted(section_keys, key=lambda k: section_relevance[k], reverse=True)
+    visible_sections = ranked[:4]
+
+    # Parse jurisdiction
+    jurisdiction = parsed.get("jurisdiction") or defaults["jurisdiction"]
+
     return {
-        "next_actions": parsed.get("next_actions") or defaults["next_actions"],
-        "related_statutes": parsed.get("related_statutes") or defaults["related_statutes"],
-        "checklist": parsed.get("checklist") or defaults["checklist"],
-        "info_gaps": parsed.get("info_gaps") or defaults["info_gaps"],
+        **result_sections,
+        "section_relevance": section_relevance,
+        "visible_sections": visible_sections,
+        "jurisdiction": jurisdiction,
     }
 
 

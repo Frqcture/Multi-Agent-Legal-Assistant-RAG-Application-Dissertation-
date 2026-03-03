@@ -26,6 +26,58 @@
     align-items: center;
 }
 
+/* ── Jurisdiction Badge ──────────────────────────────────────────────── */
+.jurisdictionBadge {
+    position: absolute;
+    top: 18px;
+    left: 24px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #a8a8a8;
+    background: rgba(30, 30, 30, 0.85);
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 5px 10px;
+    z-index: 10;
+    backdrop-filter: blur(6px);
+}
+
+.jurisdictionLabel {
+    color: #666;
+    font-weight: 400;
+}
+
+.jurisdictionName {
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
+.jurisdictionConf {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.conf_high {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+}
+
+.conf_medium {
+    background: rgba(243, 156, 18, 0.15);
+    color: #f39c12;
+}
+
+.conf_low {
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+}
+
 .contentWrapper {
     width: 100%;
     max-width: 768px; /* Standard tablet/small laptop width */
@@ -343,6 +395,11 @@
 .step_responder {
     background: #2d6f4a;
     color: #8be8b8;
+}
+
+.step_drafter {
+    background: #6f5d2d;
+    color: #e8d88b;
 }
 
 .stepBody {
