@@ -308,6 +308,84 @@
     color: #777;
 }
 
+/* ── Deadlines ─────────────────────────────────────────────────────── */
+.deadlineRow {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: #1a1a1a;
+}
+
+.deadlineText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.deadlineTitle {
+    font-size: 0.88rem;
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
+.deadlineDate {
+    font-size: 0.74rem;
+    color: #82b1ff;
+    font-weight: 400;
+}
+
+.deadlineDesc {
+    font-size: 0.76rem;
+    color: #777;
+}
+
+/* ── Conflicts ─────────────────────────────────────────────────────── */
+.conflictRow {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: #1a1a1a;
+}
+
+.conflictText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.conflictParty {
+    font-size: 0.88rem;
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
+.conflictType {
+    font-size: 0.72rem;
+    color: #f39c12;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-weight: 600;
+}
+
+.conflictDesc {
+    font-size: 0.76rem;
+    color: #777;
+}
+
+.conflictDocs {
+    font-size: 0.72rem;
+    color: #555;
+    font-style: italic;
+}
+
 /* ── States ─────────────────────────────────────────────────────────── */
 .errorBar {
     background: rgba(231, 76, 60, 0.12);

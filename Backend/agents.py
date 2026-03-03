@@ -29,6 +29,7 @@ class AgentRole(str, Enum):
     PLANNER = "planner"
     RETRIEVER = "retriever"
     RESPONDER = "responder"
+    DRAFTER = "drafter"
 
 
 @dataclass
@@ -64,6 +65,8 @@ class WorkflowState:
     completed_at: Optional[str] = None
     used_web_search: bool = False
     web_sources: List[Dict] = field(default_factory=list)
+    is_draft_request: bool = False
+    draft_type: Optional[str] = None
 
     def to_dict(self) -> Dict:
         return {
@@ -78,6 +81,8 @@ class WorkflowState:
             "completed_at": self.completed_at,
             "used_web_search": self.used_web_search,
             "web_sources": self.web_sources,
+            "is_draft_request": self.is_draft_request,
+            "draft_type": self.draft_type,
         }
 
 
@@ -169,6 +174,8 @@ class AgentCoordinator:
 
     def __init__(self):
         self.llm = ChatOllama(model="gemma3:4b", temperature=0.1)
+        self.planner_llm = ChatOllama(model="gemma3:4b", temperature=0.0, num_predict=128)
+        self.drafter_llm = ChatOllama(model="gemma3:4b", temperature=0.3, num_predict=2048)
         self.mcp_client = MCPClient()
         # In-memory workflow store (use Redis/DB for production)
         self.workflows: Dict[str, WorkflowState] = {}
@@ -224,8 +231,11 @@ class AgentCoordinator:
             # Step 2: Retriever agent
             await self._run_retriever(workflow)
 
-            # Step 3: Responder agent
-            await self._run_responder(workflow)
+            # Step 3: Drafter or Responder agent
+            if workflow.is_draft_request:
+                await self._run_drafter(workflow)
+            else:
+                await self._run_responder(workflow)
 
             workflow.status = WorkflowStatus.COMPLETED
             workflow.completed_at = datetime.now().isoformat()
@@ -239,12 +249,43 @@ class AgentCoordinator:
             await self.mcp_client.stop()
 
     async def _run_planner(self, workflow: WorkflowState):
-        """Planner agent: List available docs and set a plan without an LLM call."""
+        """Planner agent: Classify the query intent and list available docs."""
         step = AgentStep(
             agent=AgentRole.PLANNER,
-            message="Analysing available documents..."
+            message="Analysing query and available documents..."
         )
         workflow.steps.append(step)
+
+        # Use LLM to classify intent
+        classification_prompt = (
+            "Classify the following user query. Respond with ONLY a JSON object, nothing else.\n\n"
+            "Query: \"" + workflow.query + "\"\n\n"
+            "If the user is asking to DRAFT or GENERATE a legal document (e.g. a letter, demand letter, brief, "
+            "notice, contract, motion, complaint, response, memorandum), respond:\n"
+            '{"intent": "draft", "draft_type": "<type of document>"}\n\n'
+            "If the user is asking a question, searching for information, or anything else, respond:\n"
+            '{"intent": "query"}\n\n'
+            "Respond ONLY with the JSON object."
+        )
+
+        try:
+            classification = await asyncio.wait_for(
+                self.planner_llm.ainvoke([
+                    SystemMessage(content="You classify user queries. Respond ONLY with valid JSON."),
+                    HumanMessage(content=classification_prompt),
+                ]),
+                timeout=15,  # short timeout – fall back to normal query if slow
+            )
+
+            import re
+            json_match = re.search(r'\{[^}]+\}', classification.content)
+            if json_match:
+                parsed = json.loads(json_match.group())
+                if parsed.get("intent") == "draft":
+                    workflow.is_draft_request = True
+                    workflow.draft_type = parsed.get("draft_type", "legal document")
+        except (asyncio.TimeoutError, Exception):
+            pass  # Default to normal query if classification fails or times out
 
         docs_result = await self.mcp_client.call_tool("list_user_docs", {
             "user_id": workflow.user_id
@@ -255,7 +296,13 @@ class AgentCoordinator:
 
         if docs_result.get("success"):
             files = docs_result.get("data", {}).get("files", [])
-            if files:
+            if workflow.is_draft_request:
+                step.message = (
+                    f"Plan: draft a {workflow.draft_type} using context from "
+                    f"{len(files)} document(s) — {', '.join(files)}" if files
+                    else f"Plan: draft a {workflow.draft_type} (no documents found — using general knowledge)"
+                )
+            elif files:
                 step.message = f"Plan: search {len(files)} document(s) — {', '.join(files)}"
             else:
                 step.message = "Plan: no documents found — will fall back to web search."
@@ -429,6 +476,59 @@ class AgentCoordinator:
 
         workflow.answer = response.content + web_note
         step.message = "Response generated from web search results." if is_web else "Response generated with citations."
+
+    async def _run_drafter(self, workflow: WorkflowState):
+        """Drafter agent: Generate a first-draft legal document based on case context."""
+        step = AgentStep(
+            agent=AgentRole.DRAFTER,
+            message=f"Drafting {workflow.draft_type}..."
+        )
+        workflow.steps.append(step)
+
+        context = getattr(workflow, "_retrieved_context", [])
+
+        if context:
+            context_text = "\n\n".join([
+                f"--- SOURCE: [{c.get('source', 'Unknown')}, Page {c.get('page', '?')}] ---\n{c.get('content', '')}"
+                for c in context
+            ])
+        else:
+            context_text = "No case documents available."
+
+        system_prompt = (
+            "You are a legal document drafter. You generate professional first-draft legal documents "
+            "based on the case context provided. The draft should be properly formatted with appropriate "
+            "sections, legal language, and placeholders (marked with [PLACEHOLDER]) for any information "
+            "that is not available in the context.\n\n"
+            "Important:\n"
+            "- Use formal legal language appropriate for the document type\n"
+            "- Include proper headers, date lines, and signature blocks\n"
+            "- Mark uncertain information with [PLACEHOLDER] tags\n"
+            "- Reference source documents where applicable\n"
+            "- Include a disclaimer that this is an AI-generated first draft requiring legal review"
+        )
+
+        user_prompt = (
+            f"Generate a first draft of a {workflow.draft_type}.\n\n"
+            f"User request: {workflow.query}\n\n"
+            f"Case context from uploaded documents:\n{context_text}\n\n"
+            f"Generate the complete draft document."
+        )
+
+        response = await self.drafter_llm.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ])
+
+        disclaimer = (
+            "\n\n---\n"
+            "**⚠️ AI-Generated Draft:** This is a computer-generated first draft and has not been "
+            "reviewed by a qualified legal professional. It should be thoroughly reviewed, edited, "
+            "and validated before any use. Do not rely on this draft as legal advice."
+        )
+
+        workflow.answer = response.content + disclaimer
+        step.message = f"Draft {workflow.draft_type} generated successfully."
 
 
 # Singleton coordinator instance

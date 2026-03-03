@@ -1,8 +1,8 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styles from './Search.module.css';
 import { BiArrowToRight, BiBook, BiLibrary } from "react-icons/bi";
-import { BiBrain, BiSearch, BiMessageDetail, BiWorld } from "react-icons/bi";
+import { BiBrain, BiSearch, BiMessageDetail, BiWorld, BiFile } from "react-icons/bi";
 import { CiLogout } from "react-icons/ci";
 import { FiX, FiTrash2, FiEye, FiEyeOff, FiExternalLink } from 'react-icons/fi';
 import ProactiveDashboard from './ProactiveDashboard';
@@ -158,6 +158,7 @@ const Search: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
     const [userFiles, setUserFiles] = useState<string[]>([]);
     const [lastAskedQuery, setLastAskedQuery] = useState<string>("");
+    const [jurisdiction, setJurisdiction] = useState<{ name: string; confidence: string; detected_from: string } | null>(null);
     
     // Ref to trigger the hidden file input
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -222,6 +223,10 @@ const Search: React.FC = () => {
         wrapper.scrollTo({ top: 0, behavior: 'smooth' });
         setTimeout(() => { lockRef.current = false; }, 600);
     };
+
+    const handleJurisdictionChange = useCallback((j: { name: string; confidence: string; detected_from: string } | null) => {
+        setJurisdiction(j);
+    }, []);
 
     const fetchFiles = async () => {
         try {
@@ -331,6 +336,16 @@ const Search: React.FC = () => {
 
     return (
         <div className={styles.pageContainer}>
+            {/* Jurisdiction badge — top left */}
+            {jurisdiction && jurisdiction.name && jurisdiction.name !== 'Unknown' && (
+                <div className={styles.jurisdictionBadge} title={jurisdiction.detected_from}>
+                    <span className={styles.jurisdictionLabel}>Jurisdiction:</span>{' '}
+                    <span className={styles.jurisdictionName}>{jurisdiction.name}</span>
+                    <span className={`${styles.jurisdictionConf} ${styles[`conf_${jurisdiction.confidence}`]}`}>
+                        {jurisdiction.confidence}
+                    </span>
+                </div>
+            )}
             <div className={styles.navbar}>
                 <button
                     className={`${styles.navButton} ${showSteps ? styles.navButtonActive : ''}`}
@@ -359,6 +374,7 @@ const Search: React.FC = () => {
                         latestQuery={lastAskedQuery}
                         autoCollapsed={autoCollapsed}
                         onExpand={handleExpandInsights}
+                        onJurisdictionChange={handleJurisdictionChange}
                     />
                 </div>
 
@@ -404,6 +420,7 @@ const Search: React.FC = () => {
                                     planner: <BiBrain />,
                                     retriever: <BiSearch />,
                                     responder: <BiMessageDetail />,
+                                    drafter: <BiFile />,
                                 };
                                 return (
                                   <div key={idx} className={styles.stepItem}>

@@ -10,6 +10,8 @@ import {
     BiChevronDown,
     BiChevronUp,
     BiInfoCircle,
+    BiCalendarEvent,
+    BiShieldQuarter,
 } from 'react-icons/bi';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -42,11 +44,40 @@ interface InfoGap {
     shown_because?: string;
 }
 
+interface Deadline {
+    title: string;
+    date: string;
+    source: string;
+    urgency: 'high' | 'medium' | 'low';
+    description: string;
+    shown_because?: string;
+}
+
+interface Conflict {
+    party_name: string;
+    documents: string[];
+    conflict_type: string;
+    severity: 'high' | 'medium' | 'low';
+    description: string;
+    shown_because?: string;
+}
+
+interface Jurisdiction {
+    name: string;
+    confidence: 'high' | 'medium' | 'low';
+    detected_from: string;
+}
+
 interface ProactiveInsights {
     next_actions: NextAction[];
     related_statutes: RelatedStatute[];
     checklist: ChecklistItem[];
     info_gaps: InfoGap[];
+    deadlines: Deadline[];
+    conflicts: Conflict[];
+    section_relevance: Record<string, number>;
+    visible_sections: string[];
+    jurisdiction: Jurisdiction;
 }
 
 interface ProactiveDashboardProps {
@@ -54,6 +85,7 @@ interface ProactiveDashboardProps {
     latestQuery?: string;
     autoCollapsed?: boolean;
     onExpand?: () => void;
+    onJurisdictionChange?: (jurisdiction: Jurisdiction | null) => void;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -302,6 +334,147 @@ const InfoGapsCard: React.FC<{ items: InfoGap[]; autoCollapsed?: boolean; onExpa
     );
 };
 
+// ── Deadline countdown helper ──────────────────────────────────────────────
+
+function daysUntil(dateStr: string): number | null {
+    try {
+        const target = new Date(dateStr + 'T00:00:00');
+        if (isNaN(target.getTime())) return null;
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    } catch {
+        return null;
+    }
+}
+
+function formatCountdown(days: number | null): string {
+    if (days === null) return 'Date unclear';
+    if (days < 0) return `${Math.abs(days)}d overdue`;
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Tomorrow';
+    if (days <= 30) return `${days} days`;
+    const months = Math.floor(days / 30);
+    return `${months}mo ${days % 30}d`;
+}
+
+function countdownClass(days: number | null): string {
+    if (days === null) return styles.badgeMedium;
+    if (days <= 7) return styles.badgeHigh;
+    if (days <= 30) return styles.badgeMedium;
+    return styles.badgeLow;
+}
+
+const DeadlinesCard: React.FC<{ items: Deadline[]; autoCollapsed?: boolean; onExpand?: () => void }> = ({ items, autoCollapsed, onExpand }) => {
+    const [manualExpanded, setManualExpanded] = useState(true);
+    const isOpen = autoCollapsed ? false : manualExpanded;
+    const handleClick = () => {
+        if (autoCollapsed && onExpand) { onExpand(); return; }
+        setManualExpanded(!manualExpanded);
+    };
+
+    // Sort by date (soonest first)
+    const sorted = [...items].sort((a, b) => {
+        const da = daysUntil(a.date);
+        const db = daysUntil(b.date);
+        if (da === null && db === null) return 0;
+        if (da === null) return 1;
+        if (db === null) return -1;
+        return da - db;
+    });
+
+    return (
+        <div className={styles.card}>
+            <div className={styles.cardHeader} onClick={handleClick}>
+                <div className={styles.cardTitle}>
+                    <BiCalendarEvent className={styles.cardIcon} />
+                    <span>Deadline Tracker</span>
+                    <span className={styles.count}>{items.length}</span>
+                </div>
+                {isOpen ? <BiChevronUp /> : <BiChevronDown />}
+            </div>
+            <div className={`${styles.cardBodyWrap} ${isOpen ? styles.cardBodyOpen : styles.cardBodyClosed}`}>
+                <div className={styles.cardBody}>
+                    {sorted.length === 0 ? (
+                        <p className={styles.emptyText}>No deadlines detected in your documents.</p>
+                    ) : (
+                        sorted.map((d, i) => {
+                            const days = daysUntil(d.date);
+                            return (
+                                <div key={i} className={styles.deadlineRow}>
+                                    <span className={`${styles.badge} ${countdownClass(days)}`}>
+                                        {formatCountdown(days)}
+                                    </span>
+                                    <div className={styles.deadlineText}>
+                                        <span className={styles.deadlineTitle}>{d.title}</span>
+                                        <span className={styles.deadlineDate}>{d.date} &middot; {d.source}</span>
+                                        <span className={styles.deadlineDesc}>{d.description}</span>
+                                    </div>
+                                    <InfoTip text={d.shown_because} />
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ConflictsCard: React.FC<{ items: Conflict[]; autoCollapsed?: boolean; onExpand?: () => void }> = ({ items, autoCollapsed, onExpand }) => {
+    const [manualExpanded, setManualExpanded] = useState(true);
+    const isOpen = autoCollapsed ? false : manualExpanded;
+    const handleClick = () => {
+        if (autoCollapsed && onExpand) { onExpand(); return; }
+        setManualExpanded(!manualExpanded);
+    };
+
+    const conflictTypeLabel: Record<string, string> = {
+        opposing_party: 'Opposing Party',
+        shared_party: 'Shared Party',
+        witness_overlap: 'Witness Overlap',
+    };
+
+    return (
+        <div className={styles.card}>
+            <div className={styles.cardHeader} onClick={handleClick}>
+                <div className={styles.cardTitle}>
+                    <BiShieldQuarter className={styles.cardIcon} />
+                    <span>Conflict Check</span>
+                    <span className={styles.count}>{items.length}</span>
+                </div>
+                {isOpen ? <BiChevronUp /> : <BiChevronDown />}
+            </div>
+            <div className={`${styles.cardBodyWrap} ${isOpen ? styles.cardBodyOpen : styles.cardBodyClosed}`}>
+                <div className={styles.cardBody}>
+                    {items.length === 0 ? (
+                        <p className={styles.emptyText}>No conflicts detected across your documents.</p>
+                    ) : (
+                        items.map((c, i) => (
+                            <div key={i} className={styles.conflictRow}>
+                                <span className={`${styles.badge} ${priorityBadge[c.severity] ?? styles.badgeMedium}`}>
+                                    {c.severity}
+                                </span>
+                                <div className={styles.conflictText}>
+                                    <span className={styles.conflictParty}>{c.party_name}</span>
+                                    <span className={styles.conflictType}>
+                                        {conflictTypeLabel[c.conflict_type] || c.conflict_type}
+                                    </span>
+                                    <span className={styles.conflictDesc}>{c.description}</span>
+                                    <span className={styles.conflictDocs}>
+                                        Found in: {c.documents.join(', ')}
+                                    </span>
+                                </div>
+                                <InfoTip text={c.shown_because} />
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────
 
 const ProactiveDashboard: React.FC<ProactiveDashboardProps> = ({
@@ -309,6 +482,7 @@ const ProactiveDashboard: React.FC<ProactiveDashboardProps> = ({
     latestQuery = '',
     autoCollapsed = false,
     onExpand,
+    onJurisdictionChange,
 }) => {
     const [insights, setInsights] = useState<ProactiveInsights | null>(null);
     const [loading, setLoading] = useState(false);
@@ -340,12 +514,17 @@ const ProactiveDashboard: React.FC<ProactiveDashboardProps> = ({
             const data: ProactiveInsights = await res.json();
             setInsights(data);
             setChecklist(mergeChecklist(data.checklist));
+
+            // Notify parent of jurisdiction change
+            if (onJurisdictionChange && data.jurisdiction) {
+                onJurisdictionChange(data.jurisdiction);
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load insights');
         } finally {
             setLoading(false);
         }
-    }, [baseUrl, latestQuery]);
+    }, [baseUrl, latestQuery, onJurisdictionChange]);
 
     // Fetch on mount and when the query changes meaningfully
     useEffect(() => {
@@ -361,6 +540,19 @@ const ProactiveDashboard: React.FC<ProactiveDashboardProps> = ({
             return updated;
         });
     };
+
+    // Map section names to their card components
+    const sectionCards: Record<string, React.ReactNode> = insights ? {
+        next_actions: <NextActionsCard key="next_actions" items={insights.next_actions} autoCollapsed={autoCollapsed} onExpand={onExpand} />,
+        related_statutes: <StatutesCard key="related_statutes" items={insights.related_statutes} autoCollapsed={autoCollapsed} onExpand={onExpand} />,
+        checklist: <ChecklistCard key="checklist" items={checklist} onToggle={handleChecklistToggle} autoCollapsed={autoCollapsed} onExpand={onExpand} />,
+        info_gaps: <InfoGapsCard key="info_gaps" items={insights.info_gaps} autoCollapsed={autoCollapsed} onExpand={onExpand} />,
+        deadlines: <DeadlinesCard key="deadlines" items={insights.deadlines || []} autoCollapsed={autoCollapsed} onExpand={onExpand} />,
+        conflicts: <ConflictsCard key="conflicts" items={insights.conflicts || []} autoCollapsed={autoCollapsed} onExpand={onExpand} />,
+    } : {};
+
+    // Determine which 4 sections to show
+    const visibleSections = insights?.visible_sections || ['next_actions', 'related_statutes', 'checklist', 'info_gaps'];
 
     // ── Render ─────────────────────────────────────────────────────────────
 
@@ -391,10 +583,7 @@ const ProactiveDashboard: React.FC<ProactiveDashboardProps> = ({
 
             {insights && (
                 <div className={styles.grid}>
-                    <NextActionsCard items={insights.next_actions} autoCollapsed={autoCollapsed} onExpand={onExpand} />
-                    <StatutesCard items={insights.related_statutes} autoCollapsed={autoCollapsed} onExpand={onExpand} />
-                    <ChecklistCard items={checklist} onToggle={handleChecklistToggle} autoCollapsed={autoCollapsed} onExpand={onExpand} />
-                    <InfoGapsCard items={insights.info_gaps} autoCollapsed={autoCollapsed} onExpand={onExpand} />
+                    {visibleSections.map((section) => sectionCards[section] || null)}
                 </div>
             )}
         </div>
