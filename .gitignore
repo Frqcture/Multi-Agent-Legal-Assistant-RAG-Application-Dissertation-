@@ -1,6 +1,9 @@
 /Backend/.env
 /Frontend/RAGapp/.env
 
+/Frontend/RAGapp/node_modules/
+/Frontend/RAGapp/package-lock.json
+
 # Python
 __pycache__/
 *.pyc
@@ -10,3 +13,5 @@ Backend/chroma_db/
 
 # Node
 node_modules/
+
+
