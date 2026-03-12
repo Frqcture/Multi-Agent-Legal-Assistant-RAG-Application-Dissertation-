@@ -104,8 +104,68 @@ Each document contains precise, verifiable facts (dates, monetary figures, names
 
 *To be completed after test execution.*
 
-| Metric | Result |
-|--------|--------|
-| Planner Accuracy | /20 (%) |
-| Retrieval Success Rate (Top-5) | /20 (%) |
-| Citation Precision | / total citations (%) |
+### Per-Query Results
+
+#### Fact-Retrieval Queries (Q1–Q10)
+
+| ID | Planner Route | Correct Route? | Target Doc Retrieved in Top-5? | Retrieval Rank (1–5 or Miss) | Citations Produced | Correct Citations | Hallucinated Citations | Notes |
+|----|---------------|----------------|-------------------------------|-----------------------------|--------------------|-------------------|----------------------|-------|
+| Q1 | | Yes / No | Yes / No | | | | | |
+| Q2 | | Yes / No | Yes / No | | | | | |
+| Q3 | | Yes / No | Yes / No | | | | | |
+| Q4 | | Yes / No | Yes / No | | | | | |
+| Q5 | | Yes / No | Yes / No | | | | | |
+| Q6 | | Yes / No | Yes / No | | | | | |
+| Q7 | | Yes / No | Yes / No | | | | | |
+| Q8 | | Yes / No | Yes / No | | | | | |
+| Q9 | | Yes / No | Yes / No | | | | | |
+| Q10 | | Yes / No | Yes / No | | | | | |
+
+#### Document Drafting Queries (Q11–Q20)
+
+| ID | Planner Route | Correct Route? | Target Doc Retrieved in Top-5? | Retrieval Rank (1–5 or Miss) | Citations Produced | Correct Citations | Hallucinated Citations | Notes |
+|----|---------------|----------------|-------------------------------|-----------------------------|--------------------|-------------------|----------------------|-------|
+| Q11 | | Yes / No | Yes / No | | | | | |
+| Q12 | | Yes / No | Yes / No | | | | | |
+| Q13 | | Yes / No | Yes / No | | | | | |
+| Q14 | | Yes / No | Yes / No | | | | | |
+| Q15 | | Yes / No | Yes / No | | | | | |
+| Q16 | | Yes / No | Yes / No | | | | | |
+| Q17 | | Yes / No | Yes / No | | | | | |
+| Q18 | | Yes / No | Yes / No | | | | | |
+| Q19 | | Yes / No | Yes / No | | | | | |
+| Q20 | | Yes / No | Yes / No | | | | | |
+
+### Aggregate Results
+
+| Metric | Correct | Total | Percentage |
+|--------|---------|-------|------------|
+| **Planner Accuracy** | /20 | 20 | % |
+| **Retrieval Success Rate (Top-5)** | /20 | 20 | % |
+| **Citation Precision** | | | % |
+
+### Breakdown by Query Type
+
+| Metric | Fact-Retrieval (Q1–Q10) | Drafting (Q11–Q20) |
+|--------|------------------------|-------------------|
+| Planner Accuracy | /10 (%) | /10 (%) |
+| Retrieval Success Rate | /10 (%) | /10 (%) |
+| Citation Precision | /total (%) | /total (%) |
+
+### Breakdown by Document
+
+| Document | Queries Tested | Retrieval Successes | Avg. Retrieval Rank | Citation Precision |
+|----------|---------------|--------------------|--------------------|-------------------|
+| Thompson_v_Meridian_Construction.pdf | Q1, Q6, Q11, Q16 | /4 | | /total (%) |
+| Williams_v_Ashford_Logistics_Employment.pdf | Q2, Q7, Q12, Q17 | /4 | | /total (%) |
+| Chen_Estate_Probate.pdf | Q3, Q8, Q13, Q18 | /4 | | /total (%) |
+| DataFlow_v_NexGen_IP_Dispute.pdf | Q4, Q9, Q14, Q19 | /4 | | /total (%) |
+| Patel_Tenancy_Dispute.pdf | Q5, Q10, Q15, Q20 | /4 | | /total (%) |
+
+### Failure Analysis
+
+*Record any notable failures, misroutes, hallucinations, or unexpected behaviours below.*
+
+| ID | Issue Type | Description |
+|----|-----------|-------------|
+| | | |
