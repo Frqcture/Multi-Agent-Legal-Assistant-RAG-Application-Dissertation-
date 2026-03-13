@@ -108,64 +108,67 @@ Each document contains precise, verifiable facts (dates, monetary figures, names
 
 #### Fact-Retrieval Queries (Q1–Q10)
 
-| ID | Planner Route | Correct Route? | Target Doc Retrieved in Top-5? | Retrieval Rank (1–5 or Miss) | Citations Produced | Correct Citations | Hallucinated Citations | Notes |
+| ID | Planner Route | Correct Route? | Target Doc Retrieved in Top-5? | Retrieval Rank (1–5 or Miss) | Citations Produced | Correct Citations | Hallucination? | Notes |
 |----|---------------|----------------|-------------------------------|-----------------------------|--------------------|-------------------|----------------------|-------|
-| Q1 | | Yes / No | Yes / No | | | | | |
-| Q2 | | Yes / No | Yes / No | | | | | |
-| Q3 | | Yes / No | Yes / No | | | | | |
-| Q4 | | Yes / No | Yes / No | | | | | |
-| Q5 | | Yes / No | Yes / No | | | | | |
-| Q6 | | Yes / No | Yes / No | | | | | |
-| Q7 | | Yes / No | Yes / No | | | | | |
-| Q8 | | Yes / No | Yes / No | | | | | |
-| Q9 | | Yes / No | Yes / No | | | | | |
-| Q10 | | Yes / No | Yes / No | | | | | |
+| Q1 | Fact-Retrieval | Yes | Yes | 1 | Yes | Yes | No | Missed some key information |
+| Q2 | Fact-Retrieval | Yes | No | Miss | Yes | No | No | Correct Information, but references page 1 of the correct doc |
+| Q3 | Fact-Retrieval | Yes | Yes | 1 | Yes | Yes | Yes | Missed out some information, but got the references accurate|
+| Q4 | Fact-Retrieval | Yes | Yes | 1 | Yes | Yes | No | Perfect Answer |
+| Q5 | Fact-Retrieval | Yes | Yes | 1 | Yes | Yes | No | Perfect Answer |
+| Q6 | Fact-Retrieval | Yes | No | Miss | Yes | No | No | Lacking Any Relevant Information |
+| Q7 | Fact-Retrieval | Yes | Yes | 1 | Yes | Yes | No | Perfect Answer |
+| Q8 | Fact-Retrieval | Yes | No | Miss | Yes | No | No | It has taken the right information and miscalculated the result, out by < 5% |
+| Q9 | Fact-Retrieval | Yes | Yes | 1 | Yes | Yes | No | Missing some information |
+| Q10 | Fact-Retrieval | Yes | Yes | 1 | Yes | Yes | No | Missing some information |
 
 #### Document Drafting Queries (Q11–Q20)
 
-| ID | Planner Route | Correct Route? | Target Doc Retrieved in Top-5? | Retrieval Rank (1–5 or Miss) | Citations Produced | Correct Citations | Hallucinated Citations | Notes |
-|----|---------------|----------------|-------------------------------|-----------------------------|--------------------|-------------------|----------------------|-------|
-| Q11 | | Yes / No | Yes / No | | | | | |
-| Q12 | | Yes / No | Yes / No | | | | | |
-| Q13 | | Yes / No | Yes / No | | | | | |
-| Q14 | | Yes / No | Yes / No | | | | | |
-| Q15 | | Yes / No | Yes / No | | | | | |
-| Q16 | | Yes / No | Yes / No | | | | | |
-| Q17 | | Yes / No | Yes / No | | | | | |
-| Q18 | | Yes / No | Yes / No | | | | | |
-| Q19 | | Yes / No | Yes / No | | | | | |
-| Q20 | | Yes / No | Yes / No | | | | | |
+| ID | Planner Route | Correct Route? | Target Doc Retrieved in Top-5? | Retrieval Rank (1–5 or Miss) | Hallucinations? | Notes |
+|----|---------------|----------------|-------------------------------|-----------------------------|----------------------|-------|
+| Q11 | Document Drafter | Yes | Yes | 1 | No | Perfect Answer |
+| Q12 | Document Drafter | Yes | Yes | 1 | No | Perfect Answer |
+| Q13 | Document Drafter | Yes | Yes | 1 | No | Perfect Answer |
+| Q14 | Document Drafter | Yes | Yes | 1 | No | Refused to draft letter, citing a lack of information to use |
+| Q15 | Document Drafter | Yes | Yes | 1 | No | Perfect Answer |
+| Q16 | Document Drafter | Yes | Yes | 1 | No | Perfect Answer |
+| Q17 | Document Drafter | Yes | Yes | 1 | No | Perfect Answer |
+| Q18 | Document Drafter | Yes | Yes | 1 | No | Perfect Answer |
+| Q19 | Document Drafter | Yes | Yes | 1 | No | Perfect Answer |
+| Q20 | Document Drafter | Yes | Yes | 1 | No | Refused to draft letter, citing a lack of information to use |
 
 ### Aggregate Results
 
 | Metric | Correct | Total | Percentage |
 |--------|---------|-------|------------|
-| **Planner Accuracy** | /20 | 20 | % |
-| **Retrieval Success Rate (Top-5)** | /20 | 20 | % |
-| **Citation Precision** | | | % |
+| **Planner Accuracy** | 20 | 20 | 100% |
+| **Retrieval Success Rate (Top-5)** | 17 | 20 | 85% |
+| **Citation Precision** | 7 | 10 | 70% |
 
 ### Breakdown by Query Type
 
 | Metric | Fact-Retrieval (Q1–Q10) | Drafting (Q11–Q20) |
 |--------|------------------------|-------------------|
-| Planner Accuracy | /10 (%) | /10 (%) |
-| Retrieval Success Rate | /10 (%) | /10 (%) |
-| Citation Precision | /total (%) | /total (%) |
+| Planner Accuracy | 10/10 (100%) | 10/10 (100%) |
+| Retrieval Success Rate | 7/10 (70%) | 10/10 (100%) |
+| Citation Precision | 7/10 (70%) | N/A |
 
 ### Breakdown by Document
 
 | Document | Queries Tested | Retrieval Successes | Avg. Retrieval Rank | Citation Precision |
 |----------|---------------|--------------------|--------------------|-------------------|
-| Thompson_v_Meridian_Construction.pdf | Q1, Q6, Q11, Q16 | /4 | | /total (%) |
-| Williams_v_Ashford_Logistics_Employment.pdf | Q2, Q7, Q12, Q17 | /4 | | /total (%) |
-| Chen_Estate_Probate.pdf | Q3, Q8, Q13, Q18 | /4 | | /total (%) |
-| DataFlow_v_NexGen_IP_Dispute.pdf | Q4, Q9, Q14, Q19 | /4 | | /total (%) |
-| Patel_Tenancy_Dispute.pdf | Q5, Q10, Q15, Q20 | /4 | | /total (%) |
+| Thompson_v_Meridian_Construction.pdf | Q1, Q6, Q11, Q16 | 3/4 | 1 | 100% |
+| Williams_v_Ashford_Logistics_Employment.pdf | Q2, Q7, Q12, Q17 | 3/4 | 1 | 75% |
+| Chen_Estate_Probate.pdf | Q3, Q8, Q13, Q18 | 3/4 | 1 | 100% |
+| DataFlow_v_NexGen_IP_Dispute.pdf | Q4, Q9, Q14, Q19 | 4/4 | 1 | 100% |
+| Patel_Tenancy_Dispute.pdf | Q5, Q10, Q15, Q20 | 4/4 | 1 | 100% |
 
 ### Failure Analysis
 
-*Record any notable failures, misroutes, hallucinations, or unexpected behaviours below.*
+Some of the key failures in this testing can be explained by one of 2 things:
+- Small size of the LLM used
+- Chunks being too large
 
-| ID | Issue Type | Description |
-|----|-----------|-------------|
-| | | |
+The reason I suspct these are as follows:
+- When the LLM has a small number of active parameters, it also tends to have a smaller context window, and is inherently less accurate and complete when serving information to the user. I believe this is what causes my program to answer with accurate, but only partial information. Therefore, this problem could be solved if we used a better model, however, due to the lack of processing power on my laptop and our rules about using only local LLM's, I am unable to actually verify this.
+
+- There were a few occasions where the right document was selected, but the wrong page was referenced. I believe this is an effect of a large chunking size. This is because with a large chunk size, they are more likely to overflow onto subsequent pages, while still getting marked as being on another page. To fix this I could decrease the chunk size, however I would have to work out how to do this dynamically due to the nature of the documents that I am working with. For now, I will keep it as is, but that is a definite area for improvement in the future.
