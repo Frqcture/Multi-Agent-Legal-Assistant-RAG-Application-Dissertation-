@@ -29,5 +29,3 @@ def createAccessToken(data: dict):
     expire = datetime.utcnow() + timedelta(minutes=EXPIRY_MINUTES)
     toEncode.update({"exp": expire})
     return jwt.encode(toEncode, SECRET_KEY, algorithm=ALGORITHM)
-
-

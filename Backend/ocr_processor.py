@@ -37,6 +37,3 @@ def extractTextFromScannedPdf(pdfPath: str) -> str:
     except Exception as e:
         logger.error(f"Failed to extract text: {e}")
         raise
-
-
-

@@ -35,6 +35,7 @@ class AgentRole(str, Enum):
 @dataclass
 class AgentStep:
     """A single step in the agent workflow."""
+
     agent: AgentRole
     message: str
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -47,13 +48,14 @@ class AgentStep:
             "message": self.message,
             "timestamp": self.timestamp,
             "tool_calls": self.tool_calls,
-            "tool_results": self.tool_results
+            "tool_results": self.tool_results,
         }
 
 
 @dataclass
 class WorkflowState:
     """State of a running workflow."""
+
     workflow_id: str
     query: str
     user_id: str
@@ -103,15 +105,18 @@ class MCPClient:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=1
+            bufsize=1,
         )
 
         # Initialize connection
-        await self._send_request("initialize", {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {"name": "agent-coordinator", "version": "1.0.0"}
-        })
+        await self._send_request(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "agent-coordinator", "version": "1.0.0"},
+            },
+        )
 
     async def stop(self):
         """Stop the MCP server subprocess."""
@@ -130,7 +135,7 @@ class MCPClient:
             "jsonrpc": "2.0",
             "id": self.request_id,
             "method": method,
-            "params": params
+            "params": params,
         }
 
         self.process.stdin.write(json.dumps(request) + "\n")
@@ -145,10 +150,9 @@ class MCPClient:
 
     async def call_tool(self, tool_name: str, arguments: Dict) -> Dict:
         """Call a tool on the MCP server."""
-        response = await self._send_request("tools/call", {
-            "name": tool_name,
-            "arguments": arguments
-        })
+        response = await self._send_request(
+            "tools/call", {"name": tool_name, "arguments": arguments}
+        )
 
         if "error" in response:
             return {"success": False, "error": response["error"]["message"]}
@@ -174,8 +178,12 @@ class AgentCoordinator:
 
     def __init__(self):
         self.llm = ChatOllama(model="gemma3:4b", temperature=0.1)
-        self.planner_llm = ChatOllama(model="gemma3:4b", temperature=0.0, num_predict=128)
-        self.drafter_llm = ChatOllama(model="gemma3:4b", temperature=0.3, num_predict=2048)
+        self.planner_llm = ChatOllama(
+            model="gemma3:4b", temperature=0.0, num_predict=128
+        )
+        self.drafter_llm = ChatOllama(
+            model="gemma3:4b", temperature=0.3, num_predict=2048
+        )
         self.mcp_client = MCPClient()
         # In-memory workflow store (use Redis/DB for production)
         self.workflows: Dict[str, WorkflowState] = {}
@@ -187,7 +195,7 @@ class AgentCoordinator:
             workflow_id=workflow_id,
             query=query,
             user_id=user_id,
-            status=WorkflowStatus.PENDING
+            status=WorkflowStatus.PENDING,
         )
         self.workflows[workflow_id] = workflow
         await self._run_workflow(workflow_id)
@@ -200,7 +208,7 @@ class AgentCoordinator:
             workflow_id=workflow_id,
             query=query,
             user_id=user_id,
-            status=WorkflowStatus.PENDING
+            status=WorkflowStatus.PENDING,
         )
         self.workflows[workflow_id] = workflow
 
@@ -252,14 +260,14 @@ class AgentCoordinator:
         """Planner agent: Classify the query intent and list available docs."""
         step = AgentStep(
             agent=AgentRole.PLANNER,
-            message="Analysing query and available documents..."
+            message="Analysing query and available documents...",
         )
         workflow.steps.append(step)
 
         # Use LLM to classify intent
         classification_prompt = (
             "Classify the following user query. Respond with ONLY a JSON object, nothing else.\n\n"
-            "Query: \"" + workflow.query + "\"\n\n"
+            'Query: "' + workflow.query + '"\n\n'
             "If the user is asking to DRAFT or GENERATE a legal document (e.g. a letter, demand letter, brief, "
             "notice, contract, motion, complaint, response, memorandum), respond:\n"
             '{"intent": "draft", "draft_type": "<type of document>"}\n\n'
@@ -270,15 +278,20 @@ class AgentCoordinator:
 
         try:
             classification = await asyncio.wait_for(
-                self.planner_llm.ainvoke([
-                    SystemMessage(content="You classify user queries. Respond ONLY with valid JSON."),
-                    HumanMessage(content=classification_prompt),
-                ]),
+                self.planner_llm.ainvoke(
+                    [
+                        SystemMessage(
+                            content="You classify user queries. Respond ONLY with valid JSON."
+                        ),
+                        HumanMessage(content=classification_prompt),
+                    ]
+                ),
                 timeout=15,  # short timeout – fall back to normal query if slow
             )
 
             import re
-            json_match = re.search(r'\{[^}]+\}', classification.content)
+
+            json_match = re.search(r"\{[^}]+\}", classification.content)
             if json_match:
                 parsed = json.loads(json_match.group())
                 if parsed.get("intent") == "draft":
@@ -287,11 +300,13 @@ class AgentCoordinator:
         except (asyncio.TimeoutError, Exception):
             pass  # Default to normal query if classification fails or times out
 
-        docs_result = await self.mcp_client.call_tool("list_user_docs", {
-            "user_id": workflow.user_id
-        })
+        docs_result = await self.mcp_client.call_tool(
+            "list_user_docs", {"user_id": workflow.user_id}
+        )
 
-        step.tool_calls.append({"tool": "list_user_docs", "args": {"user_id": workflow.user_id}})
+        step.tool_calls.append(
+            {"tool": "list_user_docs", "args": {"user_id": workflow.user_id}}
+        )
         step.tool_results.append(docs_result)
 
         if docs_result.get("success"):
@@ -299,13 +314,18 @@ class AgentCoordinator:
             if workflow.is_draft_request:
                 step.message = (
                     f"Plan: draft a {workflow.draft_type} using context from "
-                    f"{len(files)} document(s) — {', '.join(files)}" if files
+                    f"{len(files)} document(s) — {', '.join(files)}"
+                    if files
                     else f"Plan: draft a {workflow.draft_type} (no documents found — using general knowledge)"
                 )
             elif files:
-                step.message = f"Plan: search {len(files)} document(s) — {', '.join(files)}"
+                step.message = (
+                    f"Plan: search {len(files)} document(s) — {', '.join(files)}"
+                )
             else:
-                step.message = "Plan: no documents found — will fall back to web search."
+                step.message = (
+                    "Plan: no documents found — will fall back to web search."
+                )
         else:
             step.message = "Plan: will search documents and synthesise an answer."
 
@@ -313,21 +333,19 @@ class AgentCoordinator:
         """Retriever agent: Search for relevant information."""
         step = AgentStep(
             agent=AgentRole.RETRIEVER,
-            message="Searching documents for relevant information..."
+            message="Searching documents for relevant information...",
         )
         workflow.steps.append(step)
 
         # Search documents
-        search_result = await self.mcp_client.call_tool("search_docs", {
-            "query": workflow.query,
-            "user_id": workflow.user_id,
-            "top_k": 5
-        })
+        search_result = await self.mcp_client.call_tool(
+            "search_docs",
+            {"query": workflow.query, "user_id": workflow.user_id, "top_k": 5},
+        )
 
-        step.tool_calls.append({
-            "tool": "search_docs",
-            "args": {"query": workflow.query, "top_k": 5}
-        })
+        step.tool_calls.append(
+            {"tool": "search_docs", "args": {"query": workflow.query, "top_k": 5}}
+        )
         step.tool_results.append(search_result)
 
         # Minimum relevance threshold: Chroma returns L2/cosine distances where
@@ -349,14 +367,18 @@ class AgentCoordinator:
             if doc_is_relevant:
                 sources = set()
                 for chunk in chunks:
-                    sources.add(f"{chunk.get('source', 'Unknown')} (p.{chunk.get('page', '?')})")
+                    sources.add(
+                        f"{chunk.get('source', 'Unknown')} (p.{chunk.get('page', '?')})"
+                    )
                 step.message = (
                     f"Found {num_results} relevant chunks from: {', '.join(sources)} "
                     f"(best score: {best_score:.3f})"
                 )
                 workflow._retrieved_context = chunks
             else:
-                score_info = f" (best score: {best_score:.3f})" if best_score is not None else ""
+                score_info = (
+                    f" (best score: {best_score:.3f})" if best_score is not None else ""
+                )
                 step.message = (
                     f"Documents did not contain sufficiently relevant information{score_info}. "
                     "Falling back to web search..."
@@ -368,22 +390,22 @@ class AgentCoordinator:
             workflow._retrieved_context = []
             await self._run_web_search_fallback(workflow, step)
 
-    async def _run_web_search_fallback(self, workflow: WorkflowState, retriever_step: AgentStep):
+    async def _run_web_search_fallback(
+        self, workflow: WorkflowState, retriever_step: AgentStep
+    ):
         """Fallback to web search directly (not via MCP subprocess) using a thread
         executor so the synchronous DDGS call never blocks the asyncio event loop.
         """
-        retriever_step.tool_calls.append({
-            "tool": "search_web",
-            "args": {"query": workflow.query}
-        })
+        retriever_step.tool_calls.append(
+            {"tool": "search_web", "args": {"query": workflow.query}}
+        )
 
         try:
             from ddgs import DDGS
 
             loop = asyncio.get_event_loop()
             raw = await loop.run_in_executor(
-                None,
-                lambda: list(DDGS().text(workflow.query, max_results=5))
+                None, lambda: list(DDGS().text(workflow.query, max_results=5))
             )
 
             results = [
@@ -395,7 +417,11 @@ class AgentCoordinator:
                 for r in (raw or [])
             ]
 
-            tool_result = {"success": True, "num_results": len(results), "results": results}
+            tool_result = {
+                "success": True,
+                "num_results": len(results),
+                "results": results,
+            }
             retriever_step.tool_results.append(tool_result)
 
             if results:
@@ -410,14 +436,20 @@ class AgentCoordinator:
                     }
                     for r in results
                 ]
-                retriever_step.message += f" Web search returned {len(results)} results."
+                retriever_step.message += (
+                    f" Web search returned {len(results)} results."
+                )
             else:
-                retriever_step.tool_results.append({"success": False, "error": "No web results returned"})
+                retriever_step.tool_results.append(
+                    {"success": False, "error": "No web results returned"}
+                )
                 retriever_step.message += " Web search returned no results."
                 workflow._retrieved_context = []
 
         except ImportError:
-            retriever_step.tool_results.append({"success": False, "error": "duckduckgo_search not installed"})
+            retriever_step.tool_results.append(
+                {"success": False, "error": "duckduckgo_search not installed"}
+            )
             retriever_step.message += " Web search unavailable (package missing)."
             workflow._retrieved_context = []
         except Exception as e:
@@ -428,8 +460,7 @@ class AgentCoordinator:
     async def _run_responder(self, workflow: WorkflowState):
         """Responder agent: Generate final answer using already-retrieved context."""
         step = AgentStep(
-            agent=AgentRole.RESPONDER,
-            message="Generating response with citations..."
+            agent=AgentRole.RESPONDER, message="Generating response with citations..."
         )
         workflow.steps.append(step)
 
@@ -443,10 +474,12 @@ class AgentCoordinator:
         is_web = any(c.get("is_web") for c in context)
 
         if is_web:
-            context_text = "\n\n".join([
-                f"[Web: {c.get('source', 'Unknown')} – {c.get('page', '')}]: {c.get('content', '')}"
-                for c in context
-            ])
+            context_text = "\n\n".join(
+                [
+                    f"[Web: {c.get('source', 'Unknown')} – {c.get('page', '')}]: {c.get('content', '')}"
+                    for c in context
+                ]
+            )
             web_note = (
                 "\n\n---\n"
                 "**Note:** Your uploaded documents did not contain sufficient information to answer this query. "
@@ -458,10 +491,12 @@ class AgentCoordinator:
                 "Answer clearly and cite each source as [Source Name](URL)."
             )
         else:
-            context_text = "\n\n".join([
-                f"--- SOURCE: [{c.get('source', 'Unknown')}, Page {c.get('page', '?')}] ---\n{c.get('content', '')}"
-                for c in context
-            ])
+            context_text = "\n\n".join(
+                [
+                    f"--- SOURCE: [{c.get('source', 'Unknown')}, Page {c.get('page', '?')}] ---\n{c.get('content', '')}"
+                    for c in context
+                ]
+            )
             web_note = ""
             system_prompt = (
                 "You are a helpful legal assistant that answers questions strictly using the provided context. "
@@ -469,29 +504,38 @@ class AgentCoordinator:
                 "If the context doesn't contain the answer, say so."
             )
 
-        response = self.llm.invoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=f"Context:\n{context_text}\n\nQuestion: {workflow.query}")
-        ])
+        response = self.llm.invoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(
+                    content=f"Context:\n{context_text}\n\nQuestion: {workflow.query}"
+                ),
+            ]
+        )
 
         workflow.answer = response.content + web_note
-        step.message = "Response generated from web search results." if is_web else "Response generated with citations."
+        step.message = (
+            "Response generated from web search results."
+            if is_web
+            else "Response generated with citations."
+        )
 
     async def _run_drafter(self, workflow: WorkflowState):
         """Drafter agent: Generate a first-draft legal document based on case context."""
         step = AgentStep(
-            agent=AgentRole.DRAFTER,
-            message=f"Drafting {workflow.draft_type}..."
+            agent=AgentRole.DRAFTER, message=f"Drafting {workflow.draft_type}..."
         )
         workflow.steps.append(step)
 
         context = getattr(workflow, "_retrieved_context", [])
 
         if context:
-            context_text = "\n\n".join([
-                f"--- SOURCE: [{c.get('source', 'Unknown')}, Page {c.get('page', '?')}] ---\n{c.get('content', '')}"
-                for c in context
-            ])
+            context_text = "\n\n".join(
+                [
+                    f"--- SOURCE: [{c.get('source', 'Unknown')}, Page {c.get('page', '?')}] ---\n{c.get('content', '')}"
+                    for c in context
+                ]
+            )
         else:
             context_text = "No case documents available."
 
@@ -515,10 +559,12 @@ class AgentCoordinator:
             f"Generate the complete draft document."
         )
 
-        response = await self.drafter_llm.ainvoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt),
-        ])
+        response = await self.drafter_llm.ainvoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+        )
 
         disclaimer = (
             "\n\n---\n"
