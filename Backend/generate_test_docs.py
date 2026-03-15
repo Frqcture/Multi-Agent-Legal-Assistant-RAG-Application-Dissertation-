@@ -6,7 +6,6 @@ Each document contains verifiable facts for ground-truth testing.
 import os
 from fpdf import FPDF
 
-
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "TestDocuments")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

@@ -15,12 +15,14 @@ from langchain_ollama import OllamaEmbeddings
 # Multi-format support imports
 try:
     from docx import Document as DocxDocument
+
     DOCX_AVAILABLE = True
 except ImportError:
     DOCX_AVAILABLE = False
 
 try:
     from pptx import Presentation
+
     PPTX_AVAILABLE = True
 except ImportError:
     PPTX_AVAILABLE = False
@@ -29,18 +31,21 @@ try:
     from PIL import Image
     import cv2
     import numpy as np
+
     IMAGE_PROCESSING_AVAILABLE = True
 except ImportError:
     IMAGE_PROCESSING_AVAILABLE = False
 
 try:
     import pytesseract
+
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
 
 try:
     from pdf2image import convert_from_path
+
     PDF_TO_IMAGE_AVAILABLE = True
 except ImportError:
     PDF_TO_IMAGE_AVAILABLE = False
@@ -63,12 +68,16 @@ def loadPdfWithTimeout(filePath: str, useOcr: bool = True, timeoutSeconds: int =
 
     def loadPdf():
         try:
-            loader = PyPDFLoader(
-                filePath,
-                mode="page",
-                images_inner_format="markdown-img",
-                images_parser=RapidOCRBlobParser() if useOcr else None,
-            ) if useOcr else PyPDFLoader(filePath, mode="page")
+            loader = (
+                PyPDFLoader(
+                    filePath,
+                    mode="page",
+                    images_inner_format="markdown-img",
+                    images_parser=RapidOCRBlobParser() if useOcr else None,
+                )
+                if useOcr
+                else PyPDFLoader(filePath, mode="page")
+            )
             result[0] = loader.load()
         except Exception as e:
             error[0] = e
@@ -108,7 +117,7 @@ def get_user_log_file(user_id: str) -> str:
 def getProcessedFiles(log_file: str):
     """Get set of already-processed filenames from log file."""
     try:
-        with open(log_file, 'r') as f:
+        with open(log_file, "r") as f:
             return set(line.strip() for line in f)
     except FileNotFoundError:
         return set()
@@ -116,8 +125,8 @@ def getProcessedFiles(log_file: str):
 
 def updateProcessedFiles(log_file: str, filename: str):
     """Append filename to processed log."""
-    with open(log_file, 'a') as f:
-        f.write(filename + '\n')
+    with open(log_file, "a") as f:
+        f.write(filename + "\n")
 
 
 def extractDocx(filePath: str) -> str:
@@ -180,6 +189,7 @@ def extractImage(filePath: str) -> str:
     """Extract text from image files using OCR."""
     try:
         from langchain_community.document_loaders import UnstructuredImageLoader
+
         loader = UnstructuredImageLoader(filePath)
         docs = loader.load()
         text = "\n".join([doc.page_content for doc in docs])
@@ -193,7 +203,7 @@ def extractImage(filePath: str) -> str:
 def extractTxt(filePath: str) -> str:
     """Extract text from TXT files."""
     try:
-        with open(filePath, 'r', encoding='utf-8') as f:
+        with open(filePath, "r", encoding="utf-8") as f:
             text = f.read()
         logger.info(f"Extracted {len(text)} chars from TXT: {Path(filePath).name}")
         return text
@@ -232,7 +242,10 @@ def extractPdfWithOcr(filePath: str, useHighDpi: bool = True) -> str:
                 # Preprocess image if available
                 if IMAGE_PROCESSING_AVAILABLE:
                     import tempfile
-                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+
+                    with tempfile.NamedTemporaryFile(
+                        suffix=".png", delete=False
+                    ) as tmp:
                         image.save(tmp.name)
                         preprocessed = preprocessImageForOcr(tmp.name)
                         if preprocessed is not None:
@@ -244,21 +257,30 @@ def extractPdfWithOcr(filePath: str, useHighDpi: bool = True) -> str:
                     text = ocrWithTesseract(image)
                     if text.strip():
                         allText.append(f"--- Page {pageNum} (Tesseract) ---\n{text}")
-                        logger.info(f"Page {pageNum}: Tesseract extracted {len(text)} chars")
+                        logger.info(
+                            f"Page {pageNum}: Tesseract extracted {len(text)} chars"
+                        )
                         continue
 
                 # Fallback to RapidOCR
                 try:
-                    from langchain_community.document_loaders import UnstructuredImageLoader
+                    from langchain_community.document_loaders import (
+                        UnstructuredImageLoader,
+                    )
                     import tempfile
-                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+
+                    with tempfile.NamedTemporaryFile(
+                        suffix=".png", delete=False
+                    ) as tmp:
                         image.save(tmp.name)
                         loader = UnstructuredImageLoader(tmp.name)
                         docs = loader.load()
                         text = "\n".join([doc.page_content for doc in docs])
                         if text.strip():
                             allText.append(f"--- Page {pageNum} (RapidOCR) ---\n{text}")
-                            logger.info(f"Page {pageNum}: RapidOCR extracted {len(text)} chars")
+                            logger.info(
+                                f"Page {pageNum}: RapidOCR extracted {len(text)} chars"
+                            )
                         os.remove(tmp.name)
                 except Exception as e:
                     logger.warning(f"Page {pageNum} RapidOCR failed: {e}")
@@ -283,11 +305,15 @@ def processPdf(filePath: str, filename: str):
         docs = loadPdfWithTimeout(filePath, useOcr=True, timeoutSeconds=30)
 
         if docs:
-            contentLength = sum(len(doc.page_content) for doc in docs if doc.page_content)
+            contentLength = sum(
+                len(doc.page_content) for doc in docs if doc.page_content
+            )
             if contentLength > 100:
                 logger.info(f"Tier 1 success: {len(docs)} pages")
                 return docs
-            logger.warning(f"Tier 1: insufficient content ({contentLength} chars), trying Tier 2")
+            logger.warning(
+                f"Tier 1: insufficient content ({contentLength} chars), trying Tier 2"
+            )
         else:
             logger.warning("Tier 1: timeout or failed")
     except Exception as e:
@@ -299,11 +325,17 @@ def processPdf(filePath: str, filename: str):
         docs = loadPdfWithTimeout(filePath, useOcr=False, timeoutSeconds=30)
 
         if docs:
-            contentLength = sum(len(doc.page_content) for doc in docs if doc.page_content)
+            contentLength = sum(
+                len(doc.page_content) for doc in docs if doc.page_content
+            )
             if contentLength > 100:
-                logger.info(f"Tier 2 success: {len(docs)} pages with {contentLength} chars")
+                logger.info(
+                    f"Tier 2 success: {len(docs)} pages with {contentLength} chars"
+                )
                 return docs
-            logger.warning(f"Tier 2: insufficient content ({contentLength} chars), trying Tier 3")
+            logger.warning(
+                f"Tier 2: insufficient content ({contentLength} chars), trying Tier 3"
+            )
         else:
             logger.warning("Tier 2: timeout or failed")
     except Exception as e:
@@ -334,14 +366,27 @@ def runIngestion(userId: str):
     log_file = get_user_log_file(userId)
 
     vectorstore = Chroma(
-        persist_directory=PERSIST_DIRECTORY,
-        embedding_function=embeddingModel
+        persist_directory=PERSIST_DIRECTORY, embedding_function=embeddingModel
     )
 
     processedFiles = getProcessedFiles(log_file)
-    supportedExtensions = ('.pdf', '.docx', '.pptx', '.txt', '.png', '.jpg', '.jpeg', '.tiff', '.bmp')
+    supportedExtensions = (
+        ".pdf",
+        ".docx",
+        ".pptx",
+        ".txt",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".tiff",
+        ".bmp",
+    )
 
-    allFiles = [f for f in os.listdir(source_directory) if any(f.lower().endswith(ext) for ext in supportedExtensions)]
+    allFiles = [
+        f
+        for f in os.listdir(source_directory)
+        if any(f.lower().endswith(ext) for ext in supportedExtensions)
+    ]
     newFiles = [f for f in allFiles if f not in processedFiles]
 
     if not newFiles:
@@ -359,27 +404,65 @@ def runIngestion(userId: str):
             logger.info(f"Processing: {filename}")
             docs = None
 
-            if fileExt == '.pdf':
+            if fileExt == ".pdf":
                 docs = processPdf(filePath, filename)
-            elif fileExt == '.docx':
+            elif fileExt == ".docx":
                 text = extractDocx(filePath)
-                docs = [Document(page_content=text, metadata={"source": filePath, "document_name": filename})] if text.strip() else None
-            elif fileExt == '.pptx':
+                docs = (
+                    [
+                        Document(
+                            page_content=text,
+                            metadata={"source": filePath, "document_name": filename},
+                        )
+                    ]
+                    if text.strip()
+                    else None
+                )
+            elif fileExt == ".pptx":
                 text = extractPptx(filePath)
-                docs = [Document(page_content=text, metadata={"source": filePath, "document_name": filename})] if text.strip() else None
-            elif fileExt == '.txt':
+                docs = (
+                    [
+                        Document(
+                            page_content=text,
+                            metadata={"source": filePath, "document_name": filename},
+                        )
+                    ]
+                    if text.strip()
+                    else None
+                )
+            elif fileExt == ".txt":
                 text = extractTxt(filePath)
-                docs = [Document(page_content=text, metadata={"source": filePath, "document_name": filename})] if text.strip() else None
-            elif fileExt in ('.png', '.jpg', '.jpeg', '.tiff', '.bmp'):
+                docs = (
+                    [
+                        Document(
+                            page_content=text,
+                            metadata={"source": filePath, "document_name": filename},
+                        )
+                    ]
+                    if text.strip()
+                    else None
+                )
+            elif fileExt in (".png", ".jpg", ".jpeg", ".tiff", ".bmp"):
                 text = extractImage(filePath)
-                docs = [Document(page_content=text, metadata={"source": filePath, "document_name": filename})] if text.strip() else None
+                docs = (
+                    [
+                        Document(
+                            page_content=text,
+                            metadata={"source": filePath, "document_name": filename},
+                        )
+                    ]
+                    if text.strip()
+                    else None
+                )
 
             if not docs:
                 logger.warning(f"No content extracted from {filename}")
                 failedFiles.append((filename, "No extractable text"))
                 continue
 
-            docs = [doc for doc in docs if doc.page_content and doc.page_content.strip()]
+            docs = [
+                doc for doc in docs if doc.page_content and doc.page_content.strip()
+            ]
             if not docs:
                 failedFiles.append((filename, "Empty after filtering"))
                 continue
@@ -388,17 +471,25 @@ def runIngestion(userId: str):
 
             # Attach metadata for user isolation
             for doc in docs:
-                doc.metadata.update({
-                    "user_id": userId,
-                    "document_name": filename,
-                    "file_type": fileExt,
-                    "page_number": doc.metadata.get("page_number", 1)
-                })
+                doc.metadata.update(
+                    {
+                        "user_id": userId,
+                        "document_name": filename,
+                        "file_type": fileExt,
+                        "page_number": doc.metadata.get("page_number", 1),
+                    }
+                )
 
             # Split and filter chunks
-            textSplitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+            textSplitter = RecursiveCharacterTextSplitter(
+                chunk_size=1000, chunk_overlap=100
+            )
             splits = textSplitter.split_documents(docs)
-            splits = [split for split in splits if split.page_content and split.page_content.strip()]
+            splits = [
+                split
+                for split in splits
+                if split.page_content and split.page_content.strip()
+            ]
 
             if not splits:
                 failedFiles.append((filename, "No chunks"))

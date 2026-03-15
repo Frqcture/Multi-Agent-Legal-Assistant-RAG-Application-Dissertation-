@@ -50,7 +50,9 @@ class MCPServer:
         top_k = params.get("top_k", 5)
 
         if not query or not user_id:
-            return ToolResult(False, None, "Missing required parameters: query and user_id")
+            return ToolResult(
+                False, None, "Missing required parameters: query and user_id"
+            )
 
         try:
             vectorstore = self._get_vectorstore()
@@ -65,28 +67,31 @@ class MCPServer:
 
             # Search with user filter, returning relevance scores
             results_with_scores = vectorstore.similarity_search_with_score(
-                query,
-                k=top_k,
-                filter={"user_id": user_id_int}
+                query, k=top_k, filter={"user_id": user_id_int}
             )
 
             chunks = []
             for doc, score in results_with_scores:
-                chunks.append({
-                    "content": doc.page_content[:500],  # Truncate for response
-                    "source": doc.metadata.get("document_name", "Unknown"),
-                    "page": doc.metadata.get("page_number", "?"),
-                    "score": float(score)
-                })
+                chunks.append(
+                    {
+                        "content": doc.page_content[:500],  # Truncate for response
+                        "source": doc.metadata.get("document_name", "Unknown"),
+                        "page": doc.metadata.get("page_number", "?"),
+                        "score": float(score),
+                    }
+                )
 
             best_score = min((c["score"] for c in chunks), default=None)
 
-            return ToolResult(True, {
-                "query": query,
-                "num_results": len(chunks),
-                "chunks": chunks,
-                "best_score": best_score
-            })
+            return ToolResult(
+                True,
+                {
+                    "query": query,
+                    "num_results": len(chunks),
+                    "chunks": chunks,
+                    "best_score": best_score,
+                },
+            )
 
         except Exception as e:
             return ToolResult(False, None, str(e))
@@ -109,11 +114,9 @@ class MCPServer:
                 user_id_int = user_id
 
             files = self.rag_engine.listUserFiles(userId=user_id_int)
-            return ToolResult(True, {
-                "user_id": user_id,
-                "files": files,
-                "count": len(files)
-            })
+            return ToolResult(
+                True, {"user_id": user_id, "files": files, "count": len(files)}
+            )
 
         except Exception as e:
             return ToolResult(False, None, str(e))
@@ -124,7 +127,9 @@ class MCPServer:
         filename = params.get("filename", "")
 
         if not user_id or not filename:
-            return ToolResult(False, None, "Missing required parameters: user_id and filename")
+            return ToolResult(
+                False, None, "Missing required parameters: user_id and filename"
+            )
 
         try:
             vectorstore = self._get_vectorstore()
@@ -139,13 +144,8 @@ class MCPServer:
 
             # Get all chunks for this document
             results = vectorstore.get(
-                where={
-                    "$and": [
-                        {"user_id": user_id_int},
-                        {"document_name": filename}
-                    ]
-                },
-                include=["documents", "metadatas"]
+                where={"$and": [{"user_id": user_id_int}, {"document_name": filename}]},
+                include=["documents", "metadatas"],
             )
 
             if not results["documents"]:
@@ -154,11 +154,14 @@ class MCPServer:
             # Return first few chunks as summary context
             preview = "\n---\n".join(results["documents"][:3])
 
-            return ToolResult(True, {
-                "filename": filename,
-                "num_chunks": len(results["documents"]),
-                "preview": preview[:1000]
-            })
+            return ToolResult(
+                True,
+                {
+                    "filename": filename,
+                    "num_chunks": len(results["documents"]),
+                    "preview": preview[:1000],
+                },
+            )
 
         except Exception as e:
             return ToolResult(False, None, str(e))
@@ -167,10 +170,11 @@ class MCPServer:
         """Generate answer using RAG."""
         question = params.get("question", "")
         user_id = params.get("user_id", "")
-        context = params.get("context", "")
 
         if not question or not user_id:
-            return ToolResult(False, None, "Missing required parameters: question and user_id")
+            return ToolResult(
+                False, None, "Missing required parameters: question and user_id"
+            )
 
         try:
             if not self.rag_engine:
@@ -184,10 +188,7 @@ class MCPServer:
 
             answer = self.rag_engine.query(question, userId=user_id_int)
 
-            return ToolResult(True, {
-                "question": question,
-                "answer": answer
-            })
+            return ToolResult(True, {"question": question, "answer": answer})
 
         except Exception as e:
             return ToolResult(False, None, str(e))
@@ -202,22 +203,25 @@ class MCPServer:
 
         try:
             from duckduckgo_search import DDGS
+
             raw_results = DDGS().text(query, max_results=max_results)
             results = [
                 {
                     "title": r.get("title", ""),
                     "url": r.get("href", ""),
-                    "snippet": r.get("body", "")[:400]
+                    "snippet": r.get("body", "")[:400],
                 }
                 for r in (raw_results or [])
             ]
-            return ToolResult(True, {
-                "query": query,
-                "num_results": len(results),
-                "results": results
-            })
+            return ToolResult(
+                True, {"query": query, "num_results": len(results), "results": results}
+            )
         except ImportError:
-            return ToolResult(False, None, "duckduckgo_search package not installed. Run: pip install duckduckgo-search")
+            return ToolResult(
+                False,
+                None,
+                "duckduckgo_search package not installed. Run: pip install duckduckgo-search",
+            )
         except Exception as e:
             return ToolResult(False, None, f"Web search failed: {str(e)}")
 
@@ -249,7 +253,7 @@ class MCPServer:
             response["result"] = {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "rag-mcp-server", "version": "1.0.0"}
+                "serverInfo": {"name": "rag-mcp-server", "version": "1.0.0"},
             }
 
         elif method == "tools/list":
@@ -267,7 +271,10 @@ class MCPServer:
             response["result"] = {"status": "ok"}
 
         else:
-            response["error"] = {"code": -32601, "message": f"Method not found: {method}"}
+            response["error"] = {
+                "code": -32601,
+                "message": f"Method not found: {method}",
+            }
 
         return response
 
@@ -279,10 +286,15 @@ class MCPServer:
         protocol = asyncio.StreamReaderProtocol(reader)
         await asyncio.get_event_loop().connect_read_pipe(lambda: protocol, sys.stdin)
 
-        writer_transport, writer_protocol = await asyncio.get_event_loop().connect_write_pipe(
+        (
+            writer_transport,
+            writer_protocol,
+        ) = await asyncio.get_event_loop().connect_write_pipe(
             asyncio.streams.FlowControlMixin, sys.stdout
         )
-        writer = asyncio.StreamWriter(writer_transport, writer_protocol, reader, asyncio.get_event_loop())
+        writer = asyncio.StreamWriter(
+            writer_transport, writer_protocol, reader, asyncio.get_event_loop()
+        )
 
         while True:
             try:
@@ -314,11 +326,14 @@ def test_mode():
     print(f"✓ RAG Engine: {'Available' if server.rag_engine else 'Not available'}")
     print(f"✓ Tools available: {[t['name'] for t in get_tool_definitions()]}")
     print("\nNote: The MCP server is automatically spawned by the workflow system.")
-    print("You don't need to run it manually. Just start the FastAPI backend and use Agent Mode in the UI.")
+    print(
+        "You don't need to run it manually. Just start the FastAPI backend and use Agent Mode in the UI."
+    )
 
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1 and sys.argv[1] == "--test":
         test_mode()
     else:

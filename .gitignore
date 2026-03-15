@@ -15,3 +15,26 @@ Backend/chroma_db/
 node_modules/
 
 
+
+# Python Virtual Environments
+venv/
+env/
+.venv/
+
+# Python Caches & Tools
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Frontend Build Output
+Frontend/RAGapp/dist/
+Frontend/RAGapp/build/
+
+# IDE & OS Files
+.DS_Store
+.vscode/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
