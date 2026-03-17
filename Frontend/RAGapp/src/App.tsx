@@ -5,7 +5,7 @@ import Register from './Components/Register/Register';
 import { useAuth } from './Components/useAuth';
 
 function App() {
-  const isAuthenticated = useAuth();
+  const { isAuthenticated } = useAuth();
 
   if(isAuthenticated === null) {
     return <div>Loading...</div>;

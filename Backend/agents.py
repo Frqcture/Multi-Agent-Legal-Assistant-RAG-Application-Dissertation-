@@ -369,35 +369,21 @@ class AgentCoordinator:
             await self._run_web_search_fallback(workflow, step)
 
     async def _run_web_search_fallback(self, workflow: WorkflowState, retriever_step: AgentStep):
-        """Fallback to web search directly (not via MCP subprocess) using a thread
-        executor so the synchronous DDGS call never blocks the asyncio event loop.
-        """
+        """Fallback to web search via the MCP search_web tool."""
         retriever_step.tool_calls.append({
             "tool": "search_web",
             "args": {"query": workflow.query}
         })
 
-        try:
-            from ddgs import DDGS
+        search_result = await self.mcp_client.call_tool("search_web", {
+            "query": workflow.query,
+            "max_results": 5
+        })
 
-            loop = asyncio.get_event_loop()
-            raw = await loop.run_in_executor(
-                None,
-                lambda: list(DDGS().text(workflow.query, max_results=5))
-            )
+        retriever_step.tool_results.append(search_result)
 
-            results = [
-                {
-                    "title": r.get("title", ""),
-                    "url": r.get("href", ""),
-                    "snippet": r.get("body", "")[:400],
-                }
-                for r in (raw or [])
-            ]
-
-            tool_result = {"success": True, "num_results": len(results), "results": results}
-            retriever_step.tool_results.append(tool_result)
-
+        if search_result.get("success"):
+            results = search_result.get("data", {}).get("results", [])
             if results:
                 workflow.used_web_search = True
                 workflow.web_sources = results
@@ -412,17 +398,11 @@ class AgentCoordinator:
                 ]
                 retriever_step.message += f" Web search returned {len(results)} results."
             else:
-                retriever_step.tool_results.append({"success": False, "error": "No web results returned"})
                 retriever_step.message += " Web search returned no results."
                 workflow._retrieved_context = []
-
-        except ImportError:
-            retriever_step.tool_results.append({"success": False, "error": "duckduckgo_search not installed"})
-            retriever_step.message += " Web search unavailable (package missing)."
-            workflow._retrieved_context = []
-        except Exception as e:
-            retriever_step.tool_results.append({"success": False, "error": str(e)})
-            retriever_step.message += f" Web search failed: {e}"
+        else:
+            error = search_result.get("error", "Unknown error")
+            retriever_step.message += f" Web search failed: {error}"
             workflow._retrieved_context = []
 
     async def _run_responder(self, workflow: WorkflowState):

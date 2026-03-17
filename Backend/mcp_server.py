@@ -201,8 +201,8 @@ class MCPServer:
             return ToolResult(False, None, "Missing required parameter: query")
 
         try:
-            from duckduckgo_search import DDGS
-            raw_results = DDGS().text(query, max_results=max_results)
+            from ddgs import DDGS
+            raw_results = list(DDGS().text(query, max_results=max_results))
             results = [
                 {
                     "title": r.get("title", ""),
@@ -217,7 +217,7 @@ class MCPServer:
                 "results": results
             })
         except ImportError:
-            return ToolResult(False, None, "duckduckgo_search package not installed. Run: pip install duckduckgo-search")
+            return ToolResult(False, None, "ddgs package not installed. Run: pip install ddgs")
         except Exception as e:
             return ToolResult(False, None, f"Web search failed: {str(e)}")
 
