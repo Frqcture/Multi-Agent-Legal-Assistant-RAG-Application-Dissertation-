@@ -31,6 +31,7 @@ Frontend/RAGapp/
 │           ├── Search.module.css
 │           ├── ProactiveDashboard.tsx
 │           └── ProactiveDashboard.module.css
+│       └── Workflow/       # Experimental workflow UI (currently not routed in App.tsx)
 ├── package.json
 ├── tsconfig.json
 └── vite.config.ts          # Defines entry point & env variable resolutions
@@ -51,32 +52,37 @@ Frontend/RAGapp/
 The `Search.tsx` view handles the predominant interactivity loop of the application via local component state:
 - `messages (Message[])`: An array mapping the back-and-forth log between the 'user' and the 'bot'.
 - `inputValue (string)`: State linked to the main input box.
-- The `askQuestion` API call resolves the LLM request. The output JSON not only appends the `.answer` but unrolls the `steps` array.
-- **Agent Step Visualization:** When `showSteps` is toggled true, the UI maps out the internal AI orchestrator operations. Elements render distinct icons reflecting `planner`, `retriever`, and `responder` statuses.
+- The `askQuestion` API call resolves the LLM request. The output JSON appends `.answer`, unrolls the `steps` array, and includes web fallback metadata (`web_searched`, `web_sources`) when applicable.
+- **Agent Step Visualization:** When `showSteps` is toggled true, the UI maps out internal orchestrator operations with icons for `planner`, `retriever`, `responder`, and `drafter`.
+- `Search.tsx` also maintains `lastAskedQuery` (for proactive-insights refresh context) and jurisdiction badge state propagated from `ProactiveDashboard`.
 
 ### 3.3 The Document Library Modals
 - Inside `Search.tsx`, users can prompt the Library modal.
 - `fetchFiles()` routes to `GET /files` polling isolated user document lists. The files render iteratively with a capability mapped to `DELETE /files/{filename}`.
-- A hidden `<input type="file" multiple />` handles the document uploading. Upon changing, an asynchronous multipart `FormData` is appended and fired against `POST /upload`.
+- A hidden `<input type="file" multiple accept=".pdf" />` handles document uploading. Upon changing, an asynchronous multipart `FormData` is appended and fired against `POST /upload`.
 
 ---
 
 ## 4. Components
 
 ### `ProactiveDashboard`
-An intelligent, proactive four-panel dashboard dynamically reacting to the knowledge base's facts.
+An intelligent, proactive dashboard dynamically reacting to the knowledge base's facts.
 - **Triggers:** Queries `/proactive-insights` upon initial initialization or upon querying changes. (The backend returns a cached version if polled rapidly).
-- **Cards Rendered:**
+- **Cards Rendered (dynamic):**
   1. `NextActionsCard`: High, medium, low priority steps advised to the user.
   2. `StatutesCard`: Mappings of relevant statutes and jurisdiction constraints.
   3. `ChecklistCard`: A to-do list mapping. Critically, this interacts with `localStorage` (via `CHECKLIST_STORAGE_KEY`) to persist browser-local completion variables (`completed: boolean`), merged against fresh insights retrieved over the network.
   4. `InfoGapsCard`: Identifies vulnerabilities in the loaded documentation.
+  5. `DeadlinesCard`: Date-driven deadline tracking with urgency countdowns.
+  6. `ConflictsCard`: Cross-document conflict-of-interest signals.
+- The backend returns `visible_sections`; the UI renders only those sections (typically the top-ranked set by relevance).
 - **Scroll Behavior:** Uses an intuitive scroll auto-collapsing design interacting with `Search.tsx`'s `contentWrapperRef`. If a user scrolls deeply into their chat log, the cards collapse neatly, exposing optimal real-estate for text interaction. Expand handlers permit manual override.
+- `ProactiveDashboard` also forwards detected jurisdiction metadata to `Search.tsx` for badge display.
 
 ### `Search`
 The main chat UI wrapper. Split roughly into three segments:
 - **Navigation Bar:** Exposes Steps Toggles, the Library Viewer overlay toggler, and the Logout dispatch.
-- **Messaging Interface (`contentWrapper`):** Renders all arrays sequentially against `.messageBubble`. Embeds the Proactive Insights dashboard inherently near the top track.
+- **Messaging Interface (`contentWrapper`):** Renders all arrays sequentially against `.messageBubble`. Embeds the Proactive Insights dashboard inherently near the top track, including optional web-source banners for fallback answers.
 - **Search Footer:** Maintains the input track and exposes dual action buttons to upload files (Book icon) and submit requests (Arrow right).
 
 ### `Login` & `Register`
