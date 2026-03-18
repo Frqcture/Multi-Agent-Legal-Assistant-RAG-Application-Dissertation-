@@ -348,7 +348,42 @@ def processPdf(filePath: str, filename: str):
 
         if textContent and len(textContent.strip()) > 50:
             logger.info(f"Tier 3 success: {len(textContent)} chars")
-            return [Document(page_content=textContent, metadata={"source": filePath})]
+            
+            # Split the OCR text back into individual Document objects per page 
+            # so the downstream metadata attacher can accurately track the page numbers
+            docs = []
+            import re
+            
+            # extractPdfWithOcr labels pages like "--- Page 1 (Tesseract) ---"
+            # We split on that pattern to map text back to distinct pages
+            page_blocks = re.split(r'---\s+Page\s+(\d+).*?---', textContent)
+            
+            if len(page_blocks) > 1:
+                # page_blocks[0] is empty or text before first page
+                # page_blocks[1] is page number "1"
+                # page_blocks[2] is the content of page 1, and so on...
+                for i in range(1, len(page_blocks), 2):
+                    if i + 1 < len(page_blocks):
+                        page_num_str = page_blocks[i]
+                        page_text = page_blocks[i + 1].strip()
+                        
+                        if page_text:
+                            # Safely cast page number
+                            try:
+                                p_num = int(page_num_str)
+                            except ValueError:
+                                p_num = 1
+                                
+                            docs.append(Document(
+                                page_content=page_text, 
+                                metadata={"source": filePath, "page_number": p_num}
+                            ))
+                            
+                if docs:
+                    return docs
+                    
+            # Fallback if regex split fails
+            return [Document(page_content=textContent, metadata={"source": filePath, "page_number": 1})]
 
         logger.warning(f"Tier 3: insufficient content ({len(textContent)} chars)")
         return None
@@ -471,23 +506,64 @@ def runIngestion(userId: str):
 
             # Attach metadata for user isolation
             for doc in docs:
+                # PyPDFLoader attaches page property 0-indexed, we want to normalize it globally
+                extracted_page = doc.metadata.get("page")
+                if extracted_page is not None:
+                    # Adjust zero-index to match human readable 1-index for PyPDFLoader
+                    page_num = extracted_page + 1
+                else:
+                    # Fallback to the text-based page_number we injected for Tier 3 OCR, or default 1
+                    page_num = doc.metadata.get("page_number", 1)
+
                 doc.metadata.update(
                     {
                         "user_id": userId,
                         "document_name": filename,
                         "file_type": fileExt,
-                        "page_number": doc.metadata.get("page_number", 1),
+                        "page_number": page_num,
                     }
                 )
 
-            # Split and filter chunks
-            textSplitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000, chunk_overlap=100
-            )
-            splits = textSplitter.split_documents(docs)
+            # Natural Language/Context-Aware Chunking for OCR robustness
+            # Replaces fixed character limits with NLP sentence boundary detection.
+            from langchain_text_splitters import NLTKTextSplitter
+            import uuid
+
+            # 1. First Pass: Create larger "Parent" context blocks
+            # Groups ~3-5 sentences together as a continuous logical thought
+            # 2000 chars is just a ceiling safegaurd, it splits natively at the sentence boundary nearest to it.
+            parent_splitter = NLTKTextSplitter(chunk_size=2000, chunk_overlap=0)
+            parent_chunks = parent_splitter.split_documents(docs)
+
+            # 2. Second Pass: Create highly specific "Child" sentence clusters for precise vector retrieval
+            # Groups 1-3 sentences. Overlap is tiny to just catch boundary context.
+            child_splitter = NLTKTextSplitter(chunk_size=600, chunk_overlap=50)
+
+            final_splits = []
+
+            for parent_idx, parent in enumerate(parent_chunks):
+                # Unique ID for parent group
+                parent_id = str(uuid.uuid4())
+                
+                # Tag Parent
+                parent.metadata["chunk_level"] = "parent"
+                parent.metadata["chunk_id"] = parent_id
+                parent.metadata["parent_chunk_id"] = None
+                parent.metadata["chunk_index"] = parent_idx
+                final_splits.append(parent)
+                
+                # Split parent into child sentences implicitly ignoring broken inner newlines
+                children = child_splitter.split_documents([parent])
+                for child_idx, child in enumerate(children):
+                    child.metadata["chunk_level"] = "child"
+                    child.metadata["chunk_id"] = str(uuid.uuid4())
+                    child.metadata["parent_chunk_id"] = parent_id
+                    child.metadata["chunk_index"] = child_idx
+                    final_splits.append(child)
+
             splits = [
                 split
-                for split in splits
+                for split in final_splits
                 if split.page_content and split.page_content.strip()
             ]
 
