@@ -8,57 +8,73 @@ skinparam shadowing false
 
 ' Frontend Layer
 package "Frontend (React + TypeScript)" {
-    [Login/Register\nComponent] as Auth
-    [Search/Query\nComponent] as Search
-    [File Upload\nComponent] as Upload
-    [Proactive Dashboard\nComponent] as Dashboard
+    [Auth Pages\n(Login + Register)] as Auth
+    [Session Guard\n(useAuth + /me)] as AuthGuard
+    [Case Workspace\n(Chat + Agent Steps + Web Sources)] as Search
+    [Document Library\n(List + Delete)] as Library
+    [PDF Upload\n(Inline Uploader)] as Upload
+    [Proactive Dashboard\n(Actions/Statutes/Checklist/Gaps/Deadlines/Conflicts)] as Dashboard
 }
 
 ' Backend API Layer
 package "FastAPI Backend" {
-    [Authentication\nEndpoints] as AuthAPI
-    [Document Management\nEndpoints] as DocAPI
-    [Query Processing\nEndpoints] as QueryAPI
-    [Insights\nEndpoints] as InsightsAPI
+    [Auth + Session Endpoints\nPOST /login\nPOST /register\nPOST /logout\nGET /me] as AuthAPI
+    [Query Endpoint\nPOST /ask] as QueryAPI
+    [Document Endpoints\nPOST /upload\nGET /files\nDELETE /files/{filename}\nPOST /refresh] as DocAPI
+    [Insights Endpoint\nPOST /proactive-insights] as InsightsAPI
 }
 
-' Core Services Layer
+' Platform Services Layer
 package "Core Services" {
+    [Security Controls\nJWT Cookies + CSRF + Rate Limiting + CORS] as Security
     database "SQLite\nUser Database" as DB
-    [RAG Engine\n(LLM + Embeddings)] as RAG
-    [Document Ingestion\n(Multi-format + OCR)] as Ingest
-    [Multi-Agent System\n(MCP Server)] as MCP
+    [Agent Coordinator\nPlanner -> Retriever -> Responder/Drafter] as Coordinator
+    [MCP Server + Tools\nsearch_docs, list_user_docs, answer_question, search_web] as MCP
+    [RAG Engine\nGemma 3 + Embeddings] as RAG
+    [Ingestion Pipeline\nPDF Validation + OCR Fallback + Chunking] as Ingest
+    [Web Search Fallback\nDuckDuckGo] as Web
+    [Insights Engine\nCached LLM Analysis + Jurisdiction Detection] as InsightsEngine
     database "ChromaDB\nVector Store" as VectorDB
 }
 
 ' Frontend to Backend API Calls
-Auth --> AuthAPI : POST /login\nPOST /register\nPOST /logout
-Search --> QueryAPI : POST /ask\nGET /files
-Upload --> DocAPI : POST /upload\nDELETE /files/{filename}
-Dashboard --> InsightsAPI : POST /proactive-insights
+Auth --> AuthAPI : Login/Register
+AuthGuard --> AuthAPI : Session check
+Search --> QueryAPI : Ask legal question
+Library --> DocAPI : List/Delete docs
+Upload --> DocAPI : Upload PDF files
+Dashboard --> InsightsAPI : Fetch proactive insights
+Search --> AuthAPI : Logout
 
 ' Backend to Services
-AuthAPI --> DB : User Authentication
-DocAPI --> Ingest : Process Documents
-DocAPI --> VectorDB : Store/Delete Chunks
-QueryAPI --> MCP : Multi-Agent Query
-QueryAPI --> RAG : Semantic Search
-InsightsAPI --> RAG : Extract Context
-InsightsAPI --> RAG : Generate Insights
-Ingest --> VectorDB : Store Embeddings
-MCP --> RAG : Tool Calls
-MCP --> VectorDB : Search Documents
+AuthAPI --> Security : Enforce cookies + CSRF
+AuthAPI --> DB : User auth + identity
+QueryAPI --> Security : AuthZ + CSRF + rate limit
+QueryAPI --> Coordinator : Run multi-agent workflow
+Coordinator --> MCP : Tool calls via stdio
+Coordinator --> Web : Fallback when doc relevance is low
+Coordinator --> RAG : Grounded answer generation
+DocAPI --> Security : AuthZ + CSRF + rate limit
+DocAPI --> Ingest : Process uploaded docs
+DocAPI --> VectorDB : List/Delete user chunks
+InsightsAPI --> Security : AuthZ + CSRF + rate limit
+InsightsAPI --> RAG : Extract representative context
+InsightsAPI --> InsightsEngine : Generate sectioned insights
+Ingest --> VectorDB : Store embeddings + metadata
+MCP --> VectorDB : Semantic retrieval (user filtered)
+MCP --> RAG : Optional answer/summary tooling
 
-note right of MCP
-  Coordinates 3 agents:
-  • Planner
-  • Retriever
-  • Responder
+note right of Coordinator
+  Active agent roles:
+  - Planner
+  - Retriever
+  - Responder
+  - Drafter (for draft requests)
 end note
 
 note bottom of VectorDB
-  User isolation via
-  user_id metadata
+  Tenant isolation uses
+  user_id metadata filtering
 end note
 
 @enduml

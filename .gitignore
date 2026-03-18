@@ -1,6 +1,9 @@
 /Backend/.env
 /Frontend/RAGapp/.env
 
+/Frontend/RAGapp/node_modules/
+/Frontend/RAGapp/package-lock.json
+
 # Python
 __pycache__/
 *.pyc
@@ -10,5 +13,30 @@ Backend/chroma_db/
 
 # Node
 node_modules/
+
+
+
+# Python Virtual Environments
+venv/
+env/
+.venv/
+
+# Python Caches & Tools
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Frontend Build Output
+Frontend/RAGapp/dist/
+Frontend/RAGapp/build/
+
+# IDE & OS Files
+.DS_Store
+.vscode/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
 
 jxm1444_Writeup.tex

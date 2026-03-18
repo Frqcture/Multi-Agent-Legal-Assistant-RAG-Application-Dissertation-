@@ -10,7 +10,9 @@ from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 
 class RAGEngine:
-    def __init__(self, persistDirectory: str = "chroma_db", pdfPath: str = "testPDFinput.pdf"):
+    def __init__(
+        self, persistDirectory: str = "chroma_db", pdfPath: str = "testPDFinput.pdf"
+    ):
         load_dotenv()
         self.persistDirectory = persistDirectory
         self.pdfPath = pdfPath
@@ -23,17 +25,19 @@ class RAGEngine:
         if os.path.exists(self.persistDirectory):
             return Chroma(
                 persist_directory=self.persistDirectory,
-                embedding_function=self.embeddingModel
+                embedding_function=self.embeddingModel,
             )
 
         loader = PyPDFLoader(self.pdfPath)
         docs = loader.load()
-        textSplitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+        textSplitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000, chunk_overlap=100
+        )
         splits = textSplitter.split_documents(docs)
         return Chroma.from_documents(
             documents=splits,
             embedding=self.embeddingModel,
-            persist_directory=self.persistDirectory
+            persist_directory=self.persistDirectory,
         )
 
     def formatChromaDocs(self, docs):
@@ -49,7 +53,7 @@ class RAGEngine:
     def query(self, question: str, userId: str):
         """Query RAG engine with user isolation via metadata filtering."""
         retriever = self.vectorstore.as_retriever(
-            search_kwargs={'filter': {'user_id': userId}}
+            search_kwargs={"filter": {"user_id": userId}}
         )
 
         template = """You are a helpful assistant that answers questions strictly using provided context.
@@ -75,7 +79,7 @@ Answer:
         chain = (
             {
                 "context": retriever | RunnableLambda(self.formatChromaDocs),
-                "question": RunnablePassthrough()
+                "question": RunnablePassthrough(),
             }
             | prompt
             | self.llm
@@ -86,26 +90,21 @@ Answer:
 
     def listUserFiles(self, userId: str):
         """Get unique filenames uploaded by user."""
-        results = self.vectorstore.get(
-            where={"user_id": userId},
-            include=["metadatas"]
-        )
-        filenames = {meta["document_name"] for meta in results["metadatas"] if "document_name" in meta}
+        results = self.vectorstore.get(where={"user_id": userId}, include=["metadatas"])
+        filenames = {
+            meta["document_name"]
+            for meta in results["metadatas"]
+            if "document_name" in meta
+        }
         return list(filenames)
 
     def deleteFile(self, userId: str, filename: str):
         """Delete all chunks for a user's file."""
         results = self.vectorstore.get(
-            where={
-                "$and": [
-                    {"user_id": userId},
-                    {"document_name": filename}
-                ]
-            }
+            where={"$and": [{"user_id": userId}, {"document_name": filename}]}
         )
 
         if results["ids"]:
             self.vectorstore.delete(ids=results["ids"])
             return True
         return False
-
