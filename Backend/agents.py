@@ -397,36 +397,37 @@ class AgentCoordinator:
             "args": {"query": workflow.query}
         })
 
-        search_result = await self.mcp_client.call_tool("search_web", {
-            "query": workflow.query,
-            "max_results": 5
-        })
+        try:
+            search_result = await self.mcp_client.call_tool("search_web", {
+                "query": workflow.query,
+                "max_results": 5
+            })
 
-        retriever_step.tool_results.append(search_result)
+            retriever_step.tool_results.append(search_result)
 
-        if search_result.get("success"):
-            results = search_result.get("data", {}).get("results", [])
-            if results:
-                workflow.used_web_search = True
-                workflow.web_sources = results
-                workflow._retrieved_context = [
-                    {
-                        "content": r.get("snippet", ""),
-                        "source": r.get("title", "Web"),
-                        "page": r.get("url", ""),
-                        "is_web": True,
-                    }
-                    for r in results
-                ]
-                retriever_step.message += (
-                    f" Web search returned {len(results)} results."
-                )
-            else:
-                retriever_step.tool_results.append(
-                    {"success": False, "error": "No web results returned"}
-                )
-                retriever_step.message += " Web search returned no results."
-                workflow._retrieved_context = []
+            if search_result.get("success"):
+                results = search_result.get("data", {}).get("results", [])
+                if results:
+                    workflow.used_web_search = True
+                    workflow.web_sources = results
+                    workflow._retrieved_context = [
+                        {
+                            "content": r.get("snippet", ""),
+                            "source": r.get("title", "Web"),
+                            "page": r.get("url", ""),
+                            "is_web": True,
+                        }
+                        for r in results
+                    ]
+                    retriever_step.message += (
+                        f" Web search returned {len(results)} results."
+                    )
+                else:
+                    retriever_step.tool_results.append(
+                        {"success": False, "error": "No web results returned"}
+                    )
+                    retriever_step.message += " Web search returned no results."
+                    workflow._retrieved_context = []
 
         except ImportError:
             retriever_step.tool_results.append(
