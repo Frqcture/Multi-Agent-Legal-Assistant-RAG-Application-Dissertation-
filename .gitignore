@@ -58,4 +58,7 @@ eval_results.json
 # Notes
 journal.md
 interview.md
-!WriteUp/*.pdf
+
+# WriteUp
+WriteUp/
+jxm1444_Writeup.tex
