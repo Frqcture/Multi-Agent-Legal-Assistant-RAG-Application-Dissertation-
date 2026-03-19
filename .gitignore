@@ -2,19 +2,20 @@
 /Frontend/RAGapp/.env
 
 /Frontend/RAGapp/node_modules/
-/Frontend/RAGapp/package-lock.json
+node_modules/
 
 # Python
 __pycache__/
 *.pyc
 
-# Chroma DB (local vector store)
+# Local Data & DBs
 Backend/chroma_db/
-
-# Node
-node_modules/
-
-
+Backend/DocsToIngest/
+Backend/users.db
+Backend/IngestedFiles.log
+*.db
+*.sqlite
+*.sqlite3
 
 # Python Virtual Environments
 venv/
@@ -39,10 +40,22 @@ Frontend/RAGapp/build/
 .env.local
 .env.*.local
 
-jxm1444_Writeup.tex
-/WriteUp/jxm1444_Writeup.tex
-/WriteUp/refs.bib
-/WriteUp/SimpleStructure.jpg
+# LaTeX auto-generated build files
+*.aux
+*.bbl
+*.blg
+*.fls
+*.log
+*.out
+*.toc
+*.fdb_latexmk
+*.synctex.gz
+*.pdf
 
+# Tools / Local outputs
+eval_results.json
+
+# Notes
 journal.md
 interview.md
+!WriteUp/*.pdf
