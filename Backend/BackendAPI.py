@@ -36,6 +36,17 @@ from langchain_core.messages import HumanMessage, SystemMessage
 Base.metadata.create_all(bind=engine)
 
 MAX_FILE_SIZE = 15 * 1024 * 1024
+ALLOWED_UPLOAD_EXTENSIONS = {
+    ".pdf",
+    ".docx",
+    ".pptx",
+    ".txt",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tiff",
+    ".bmp",
+}
 UPLOAD_DIR = "DocsToIngest"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -325,9 +336,18 @@ async def uploadFile(
     user_dir = _get_user_upload_dir(currentUser.id)
 
     for file in files:
-        if not file.filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail=f"{file.filename} is not a PDF")
-        if not _looks_like_pdf(file):
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Upload is missing a filename")
+
+        file_ext = Path(file.filename).suffix.lower()
+        if file_ext not in ALLOWED_UPLOAD_EXTENSIONS:
+            allowed_list = ", ".join(sorted(ALLOWED_UPLOAD_EXTENSIONS))
+            raise HTTPException(
+                status_code=400,
+                detail=f"{file.filename} has an unsupported file type. Allowed: {allowed_list}",
+            )
+
+        if file_ext == ".pdf" and not _looks_like_pdf(file):
             raise HTTPException(
                 status_code=400, detail=f"{file.filename} is not a valid PDF"
             )
@@ -345,12 +365,14 @@ async def uploadFile(
         try:
             _save_upload_file(file, filePath, MAX_FILE_SIZE)
 
-            isSafe, statusMsg = isPdfSafe(str(filePath))
-            if not isSafe:
-                os.remove(filePath)
-                raise HTTPException(
-                    status_code=400, detail=f"PDF validation failed: {statusMsg}"
-                )
+            statusMsg = "Accepted"
+            if file_ext == ".pdf":
+                isSafe, statusMsg = isPdfSafe(str(filePath))
+                if not isSafe:
+                    os.remove(filePath)
+                    raise HTTPException(
+                        status_code=400, detail=f"PDF validation failed: {statusMsg}"
+                    )
 
             savedFiles.append(safeFilename)
             fileStatuses.append({"filename": safeFilename, "status": statusMsg})

@@ -290,7 +290,7 @@ username=newuser&password=mypassword
 
 ### `POST /upload`
 
-**Purpose:** Uploads multiple PDF files, validates them, and triggers ingestion into vectorstore.
+**Purpose:** Uploads multiple files, validates them, and triggers ingestion into vectorstore.
 
 **Rate Limit:** 5 requests per minute
 
@@ -341,7 +341,7 @@ username=newuser&password=mypassword
 - **Per-user directory isolation**: Files stored in `DocsToIngest/{user_id}/`
 - **Magic byte validation**: Checks PDF header signature before processing
 - **Path traversal prevention**: Double validation via resolve() and startswith()
-- **File type validation**: PDF only (extension + magic bytes)
+- **File type validation**: Allows supported extensions (e.g., `.pdf`, `.docx`, `.pptx`, `.txt`, `.png`, `.jpg`). For PDFs, also checks magic bytes.
 - **Streaming size validation**: Checks size incrementally during upload
 - **Duplicate prevention**: Returns 409 if file already exists
 - **Content validation**: `isPdfSafe()` checks for encryption and corruption
@@ -902,7 +902,7 @@ This endpoint powers the **Proactive Dashboard** feature in the frontend, provid
 
 ### Input Validation
 - **File path traversal prevention**: Double validation via `resolve()` and `startswith()` checks
-- **File type validation**: PDF extension checking + magic byte verification (`%PDF-` signature)
+- **File type validation**: Extension checking + magic byte verification for PDFs (`%PDF-` signature)
 - **File size limits**: 15MB maximum, validated incrementally during streaming upload
 - **Duplicate prevention**: Checks for existing files before saving (409 Conflict)
 - **Form data validation**: Pydantic models for request bodies

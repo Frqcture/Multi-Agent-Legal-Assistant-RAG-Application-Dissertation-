@@ -2,7 +2,7 @@
 
 Welcome to the Multi-Agent Legal Assistant Repository! This project explores advanced Retrieval-Augmented Generation (RAG) capabilities via a multi-agent orchestrated backend communicating over the Model Context Protocol (MCP), married to a beautiful, proactive React frontend.
 
-The system is purposely designed to securely ingest, vectorize, and search PDF case files to provide highly contextualized legal intelligence to the end user.
+The system is purposely designed to securely ingest, vectorize, and search case files to provide highly contextualized legal intelligence to the end user.
 
 ---
 
@@ -12,7 +12,7 @@ The system is purposely designed to securely ingest, vectorize, and search PDF c
 - **Model Context Protocol (MCP) Interoperability**: The vector search and retrieval functionalities operate securely via separate standard IO subprocesses mimicking industry-standard MCP capabilities.
 - **Proactive Insights Dashboard**: An automated, four-card panel that dynamically analyzes uploaded jurisprudence text to suggest `Next Actions`, `Related Statutes`, `Checklists`, and identify `Information Gaps`.
 - **Tenant-isolated Vector Datastores**: End-to-end data isolation matching document embeddings uniquely against authenticated user IDs (preventing contextual contamination inside ChromaDB).
-- **Robust Security Constructs**: Token generation with JWTs, dual-layered CSRF token validation, HTTP-Only strict cookies, API rate limiting via `slowapi`, and PDF structural safety evaluations.
+- **Robust Security Constructs**: Token generation with JWTs, dual-layered CSRF token validation, HTTP-Only strict cookies, API rate limiting via `slowapi`, and file structural safety evaluations.
 
 ---
 
@@ -92,7 +92,7 @@ The system is purposely designed to securely ingest, vectorize, and search PDF c
 ## 🛠 Usage Flow
 
 1. **Register & Log In**: Access the client interface. The secure JWT cookie bindings start immediately upon valid credentials.
-2. **Upload Documents**: Open the Library tab or use the 'Book' icon at the Chat footer to upload local `.pdf` documents.
+2. **Upload Documents**: Open the Library tab or use the 'Book' icon at the Chat footer to upload local documents (e.g., `.pdf`, `.docx`, `.pptx`, `.txt`, `.png`, `.jpg`).
 3. **Wait for Vectorization**: LangChain reads, splits, and pipes your text chunks into ChromaDB's local filesystem structure.
 4. **Ask Complex Queries**: Ask substantive questions about the files. Ensure the "Steps Visible" icon in the navigation bar is enabled to observe how the *Planner* maps out the objective, the *Retriever* hits the MCP tool interface, and the *Responder* compiles your verified citation.
 5. **Review Proactive Tools**: See automated extraction alerts analyzing how tight your legal posture currently rests based on context logs. 

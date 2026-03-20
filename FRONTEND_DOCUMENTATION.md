@@ -59,7 +59,7 @@ The `Search.tsx` view handles the predominant interactivity loop of the applicat
 ### 3.3 The Document Library Modals
 - Inside `Search.tsx`, users can prompt the Library modal.
 - `fetchFiles()` routes to `GET /files` polling isolated user document lists. The files render iteratively with a capability mapped to `DELETE /files/{filename}`.
-- A hidden `<input type="file" multiple accept=".pdf" />` handles document uploading. Upon changing, an asynchronous multipart `FormData` is appended and fired against `POST /upload`.
+- A hidden `<input type="file" multiple accept=".pdf,.docx,.pptx,.txt,.png,.jpg,.jpeg,.tiff,.bmp" />` handles document uploading. Upon changing, an asynchronous multipart `FormData` is appended and fired against `POST /upload`.
 
 ---
 
