@@ -397,36 +397,37 @@ class AgentCoordinator:
             "args": {"query": workflow.query}
         })
 
-        search_result = await self.mcp_client.call_tool("search_web", {
-            "query": workflow.query,
-            "max_results": 5
-        })
+        try:
+            search_result = await self.mcp_client.call_tool("search_web", {
+                "query": workflow.query,
+                "max_results": 5
+            })
 
-        retriever_step.tool_results.append(search_result)
+            retriever_step.tool_results.append(search_result)
 
-        if search_result.get("success"):
-            results = search_result.get("data", {}).get("results", [])
-            if results:
-                workflow.used_web_search = True
-                workflow.web_sources = results
-                workflow._retrieved_context = [
-                    {
-                        "content": r.get("snippet", ""),
-                        "source": r.get("title", "Web"),
-                        "page": r.get("url", ""),
-                        "is_web": True,
-                    }
-                    for r in results
-                ]
-                retriever_step.message += (
-                    f" Web search returned {len(results)} results."
-                )
-            else:
-                retriever_step.tool_results.append(
-                    {"success": False, "error": "No web results returned"}
-                )
-                retriever_step.message += " Web search returned no results."
-                workflow._retrieved_context = []
+            if search_result.get("success"):
+                results = search_result.get("data", {}).get("results", [])
+                if results:
+                    workflow.used_web_search = True
+                    workflow.web_sources = results
+                    workflow._retrieved_context = [
+                        {
+                            "content": r.get("snippet", ""),
+                            "source": r.get("title", "Web"),
+                            "page": r.get("url", ""),
+                            "is_web": True,
+                        }
+                        for r in results
+                    ]
+                    retriever_step.message += (
+                        f" Web search returned {len(results)} results."
+                    )
+                else:
+                    retriever_step.tool_results.append(
+                        {"success": False, "error": "No web results returned"}
+                    )
+                    retriever_step.message += " Web search returned no results."
+                    workflow._retrieved_context = []
 
         except ImportError:
             retriever_step.tool_results.append(
@@ -483,6 +484,7 @@ class AgentCoordinator:
             system_prompt = (
                 "You are a helpful legal assistant that answers questions strictly using the provided context. "
                 "Every claim must be followed by a reference: [document_name, page_number]. "
+                "CRITICAL: Do NOT escape underscores in the document_name (write file_name.pdf, never file\\_name.pdf). "
                 "If the context doesn't contain the answer, say so."
             )
 
@@ -495,7 +497,10 @@ class AgentCoordinator:
             ]
         )
 
-        workflow.answer = response.content + web_note
+        # Clean any remaining LLM markdown escaping of underscores from filenames
+        clean_content = response.content.replace(r"\_", "_")
+        
+        workflow.answer = clean_content + web_note
         step.message = (
             "Response generated from web search results."
             if is_web
@@ -555,7 +560,10 @@ class AgentCoordinator:
             "and validated before any use. Do not rely on this draft as legal advice."
         )
 
-        workflow.answer = response.content + disclaimer
+        # Clean any LLM markdown escaping of underscores just in case
+        clean_content = response.content.replace(r"\_", "_")
+
+        workflow.answer = clean_content + disclaimer
         step.message = f"Draft {workflow.draft_type} generated successfully."
 
 

@@ -190,7 +190,7 @@ username=newuser&password=mypassword
 
 ### `POST /ask`
 
-**Purpose:** Queries the RAG engine using a multi-agent workflow that coordinates planner, retriever, and responder agents via MCP server.
+**Purpose:** Queries the RAG engine using a multi-agent workflow that coordinates planner, retriever, and responder (or drafter) agents via MCP server.
 
 **Rate Limit:** 20 requests per minute
 
@@ -230,7 +230,9 @@ username=newuser&password=mypassword
       "tool_results": [{"success": true}]
     }
   ],
-  "status": "completed"
+  "status": "completed",
+  "web_searched": false,
+  "web_sources": []
 }
 ```
 
@@ -241,10 +243,10 @@ username=newuser&password=mypassword
 4. Get agent coordinator singleton instance
 5. Run multi-agent workflow **synchronously** (blocking call):
    - **Planner Agent**: Lists user docs via MCP, analyzes query with LLM, creates execution plan
-   - **Retriever Agent**: Searches documents via MCP `search_docs` tool, collects relevant chunks with sources
-   - **Responder Agent**: Generates final answer via MCP `answer_question` tool with citations
+  - **Retriever Agent**: Searches documents via MCP `search_docs` tool; if matches are weak, it falls back to MCP `search_web`
+  - **Responder/Drafter Agent**: Generates either a cited answer or a draft document depending on planner classification
 6. MCP server automatically spawned as subprocess for tool execution
-7. Return complete workflow result including answer, agent steps, and status
+7. Return complete workflow result including answer, agent steps, status, and web-search metadata
 
 **Status Codes:**
 - `200 OK` - Query successful
@@ -288,7 +290,7 @@ username=newuser&password=mypassword
 
 ### `POST /upload`
 
-**Purpose:** Uploads multiple PDF files, validates them, and triggers ingestion into vectorstore.
+**Purpose:** Uploads multiple files, validates them, and triggers ingestion into vectorstore.
 
 **Rate Limit:** 5 requests per minute
 
@@ -313,7 +315,7 @@ username=newuser&password=mypassword
 2. Validate authentication via `getCurrentUser`
 3. Create/get user-specific upload directory: `DocsToIngest/{user_id}/`
 4. For each uploaded file:
-   - Check filename ends with `.pdf`
+  - Check filename extension is in the supported allowlist (`.pdf`, `.docx`, `.pptx`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.tiff`, `.bmp`)
    - Verify PDF magic bytes (`%PDF-`) using `_looks_like_pdf()`
    - Check file size ≤ 15MB (streaming validation)
    - Sanitize filename using `os.path.basename()`
@@ -339,7 +341,7 @@ username=newuser&password=mypassword
 - **Per-user directory isolation**: Files stored in `DocsToIngest/{user_id}/`
 - **Magic byte validation**: Checks PDF header signature before processing
 - **Path traversal prevention**: Double validation via resolve() and startswith()
-- **File type validation**: PDF only (extension + magic bytes)
+- **File type validation**: Allows supported extensions (e.g., `.pdf`, `.docx`, `.pptx`, `.txt`, `.png`, `.jpg`). For PDFs, also checks magic bytes.
 - **Streaming size validation**: Checks size incrementally during upload
 - **Duplicate prevention**: Returns 409 if file already exists
 - **Content validation**: `isPdfSafe()` checks for encryption and corruption
@@ -414,8 +416,9 @@ username=newuser&password=mypassword
 - `200 OK` - File deleted
 - `401 Unauthorized` - Invalid token
 - `403 Forbidden` - Missing or invalid CSRF token
-- `404 Not Found` - File not found in vectorstore
 - `500 Internal Server Error` - Deletion failed
+
+**Implementation Note:** Current implementation wraps broad exceptions in the route handler, so a not-found condition may surface as `500` instead of `404`.
 
 **Security:**
 - User isolation via user_id metadata filtering
@@ -426,7 +429,7 @@ username=newuser&password=mypassword
 
 ### `POST /proactive-insights`
 
-**Purpose:** Generates proactive legal-clinic case insights using LLM analysis of user's documents. Returns four insight panels: recommended actions, related statutes, case checklist, and information gaps. Results are cached per-user for 1 hour.
+**Purpose:** Generates proactive legal-clinic case insights using LLM analysis of user's documents. Returns six insight sections (actions, statutes, checklist, info gaps, deadlines, conflicts), relevance scoring, and jurisdiction metadata. Results are cached per-user for 1 hour.
 
 **Rate Limit:** 10 requests per minute
 
@@ -496,7 +499,39 @@ username=newuser&password=mypassword
       "severity": "medium",
       "suggestion": "Request authorization for medical history records"
     }
-  ]
+  ],
+  "deadlines": [
+    {
+      "title": "File response",
+      "date": "2026-04-01",
+      "source": "case_file.pdf",
+      "urgency": "high",
+      "description": "Court filing deadline"
+    }
+  ],
+  "conflicts": [
+    {
+      "party_name": "ABC Ltd",
+      "documents": ["retainer.pdf", "opposition_bundle.pdf"],
+      "conflict_type": "shared_party",
+      "severity": "medium",
+      "description": "Same organisation appears in multiple opposing contexts"
+    }
+  ],
+  "section_relevance": {
+    "next_actions": 0.95,
+    "related_statutes": 0.72,
+    "checklist": 0.81,
+    "info_gaps": 0.69,
+    "deadlines": 0.88,
+    "conflicts": 0.55
+  },
+  "visible_sections": ["next_actions", "deadlines", "checklist", "related_statutes"],
+  "jurisdiction": {
+    "name": "England and Wales",
+    "confidence": "medium",
+    "detected_from": "Court references in uploaded filings"
+  }
 }
 ```
 
@@ -506,11 +541,11 @@ username=newuser&password=mypassword
 3. Check cache for user_id; if fresh (<1 hour), return cached result
 4. Extract representative document chunks (limit: 6) from user's vectorstore
 5. Format document context with source headers
-6. Send single LLM request with combined prompt for all four insight types:
+6. Send single LLM request with combined prompt for all six insight sections:
    - System prompt: "You are a legal-clinic case advisor. Respond ONLY with valid JSON."
    - User prompt includes document context and optional query context
-7. Parse LLM JSON response into four categories
-8. Apply defaults for any missing/empty sections
+7. Parse LLM JSON response into structured insight sections
+8. Compute `section_relevance`, choose `visible_sections` (top sections), and apply defaults for missing sections
 9. Cache result with timestamp
 10. Return complete insights object
 
@@ -533,7 +568,23 @@ If user has no documents uploaded, returns:
     "field": "Client documents",
     "severity": "high",
     "suggestion": "Upload relevant case files to begin analysis."
-  }]
+  }],
+  "deadlines": [],
+  "conflicts": [],
+  "section_relevance": {
+    "next_actions": 0.8,
+    "related_statutes": 0.2,
+    "checklist": 0.7,
+    "info_gaps": 0.6,
+    "deadlines": 0.1,
+    "conflicts": 0.1
+  },
+  "visible_sections": ["next_actions", "checklist", "info_gaps", "related_statutes"],
+  "jurisdiction": {
+    "name": "Unknown",
+    "confidence": "low",
+    "detected_from": "No documents uploaded"
+  }
 }
 ```
 
@@ -547,7 +598,7 @@ If user has no documents uploaded, returns:
 - **Cache TTL**: 1 hour per user
 - **LLM Model**: gemma3:4b with temperature 0.2
 - **Sample Limit**: 6 document chunks maximum
-- **Single LLM Call**: All four panels generated in one request
+- **Single LLM Call**: All six insight sections generated in one request
 - **Response Size**: ~1024 tokens maximum (constrained via `num_predict`)
 
 **Use Case:**
@@ -556,6 +607,8 @@ This endpoint powers the **Proactive Dashboard** feature in the frontend, provid
 - Relevant statutes and legal authorities
 - Case progress checklist items
 - Identified information gaps requiring attention
+- Timeline-sensitive deadline extraction
+- Cross-document conflict signals
 
 ---
 
@@ -849,7 +902,7 @@ This endpoint powers the **Proactive Dashboard** feature in the frontend, provid
 
 ### Input Validation
 - **File path traversal prevention**: Double validation via `resolve()` and `startswith()` checks
-- **File type validation**: PDF extension checking + magic byte verification (`%PDF-` signature)
+- **File type validation**: Extension checking + magic byte verification for PDFs (`%PDF-` signature)
 - **File size limits**: 15MB maximum, validated incrementally during streaming upload
 - **Duplicate prevention**: Checks for existing files before saving (409 Conflict)
 - **Form data validation**: Pydantic models for request bodies
@@ -1277,8 +1330,10 @@ For each new file:
   - `page_number` - Page/position in document
 
 **4. Chunking**
-- Split documents into 1000-character chunks using RecursiveCharacterTextSplitter
-- 100-character overlap between chunks
+- Use a two-pass NLTK sentence-aware strategy:
+  - Parent chunks (larger context blocks)
+  - Child chunks (smaller retrieval units with overlap)
+- Attach parent/child chunk metadata (`chunk_level`, `chunk_id`, `parent_chunk_id`)
 - Filter empty chunks after splitting
 
 **5. Embedding & Storage**
@@ -1759,7 +1814,7 @@ For each file:
         ↓
 Attach metadata: user_id, filename, page_number
         ↓
-Split into 1000-char chunks (100-char overlap)
+Create NLTK parent/child sentence-aware chunks
         ↓
 Embed chunks with OllamaEmbeddings
         ↓
@@ -1779,21 +1834,15 @@ User asks question (POST /ask)
         ↓
 getCurrentUser() validates JWT
         ↓
-RAGEngine.query(question, userId)
+Agent Coordinator runs planner → retriever → responder/drafter
         ↓
-Embed question with OllamaEmbeddings
+Retriever searches user documents via MCP `search_docs`
         ↓
-ChromaDB semantic search (filtered by user_id)
+If document relevance is weak, fallback to MCP `search_web`
         ↓
-Retrieve top-4 most similar chunks
+Responder/Drafter generates final output
         ↓
-Format chunks with source headers
-        ↓
-Pass to ChatOllama LLM with system prompt
-        ↓
-LLM generates cited answer
-        ↓
-Return answer to frontend
+Return answer + workflow steps (+ optional web source metadata)
 ```
 
 ---
@@ -1808,7 +1857,7 @@ Return answer to frontend
 - Scales linearly with document size
 
 **Optimization:** Chunk Size
-- Current: 1000 characters with 100 overlap
+- Current: sentence-aware parent/child chunking (NLTK splitter)
 - Larger chunks = fewer embeddings = faster
 - Smaller chunks = more precise retrieval
 
@@ -1839,8 +1888,8 @@ The Multi-Agent Workflow system implements a Model Context Protocol (MCP) based 
 │                        FastAPI Backend                          │
 │  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
 │  │  /ask Endpoint  │    │ Agent Coordinator (Singleton)       │ │
-│  │  (Synchronous)  │───▶│  ┌─────────┐ ┌─────────┐ ┌────────┐ │ │
-│  │                 │    │  │ Planner │→│Retriever│→│Responder│ │ │
+│  │  (Synchronous)  │───▶│  ┌─────────┐ ┌─────────┐ ┌────────────────┐ │ │
+│  │                 │    │  │ Planner │→│Retriever│→│Responder/Drafter│ │ │
 │  │  Returns full   │◀───│  └─────────┘ └─────────┘ └────────┘ │ │
 │  │  result + steps │    └────────────────┬────────────────────┘ │
 └──────────────────────────────────────────┼──────────────────────┘
@@ -1854,6 +1903,7 @@ The Multi-Agent Workflow system implements a Model Context Protocol (MCP) based 
                               │  │ - list_user_docs │   │
                               │  │ - get_doc_summary│   │
                               │  │ - answer_question│   │
+                              │  │ - search_web     │   │
                               │  └────────┬─────────┘   │
                               └───────────┼─────────────┘
                                           │
@@ -1909,6 +1959,7 @@ Tool definitions that wrap RAG capabilities:
 | `list_user_docs` | List all uploaded documents | `user_id` (str/int) | List of filenames, count |
 | `get_doc_summary` | Get preview of a specific document | `user_id` (str/int), `filename` (str) | Preview text (max 1000 chars), chunk count |
 | `answer_question` | Generate RAG answer with citations | `question` (str), `user_id` (str/int), `context` (str, optional) | Generated answer with source citations |
+| `search_web` | Search web when user documents are insufficient | `query` (str), `max_results` (int, default 5) | List of web result objects (title, url, snippet) |
 
 **ToolResult Format:**
 ```python
@@ -1946,7 +1997,7 @@ def get_coordinator() -> AgentCoordinator:
 - **MCP Client**: Manages subprocess connection to MCP server
 - **Workflows Dictionary**: In-memory storage (for potential async use, not currently used)
 
-**Three-Agent Pipeline:**
+**Planner + Retriever + Responder/Drafter Pipeline:**
 
 **1. Planner Agent**
 - Lists user's available documents via `list_user_docs` tool
@@ -1958,18 +2009,18 @@ def get_coordinator() -> AgentCoordinator:
 **2. Retriever Agent**
 - Calls `search_docs` tool with query and top_k=5
 - Collects relevant chunks with source information
-- Extracts unique sources (filename + page)
+- If document relevance is weak, calls `search_web` as fallback
+- Extracts unique sources (document or web)
 - Records findings in workflow step
-- Stores chunks in workflow for responder
+- Stores context in workflow for responder/drafter
 - Example: "Found 5 relevant chunks from: contract.pdf (p.3), terms.pdf (p.7)"
 
-**3. Responder Agent**
-- Calls `answer_question` tool with query
-- If successful, uses RAG-generated answer with citations
-- If failed, falls back to direct LLM call with retrieved context
-- If no context, returns "couldn't find relevant information" message
-- Records final answer in workflow
-- Example: "Response generated with citations."
+**3. Responder or Drafter Agent**
+- Planner first classifies whether the request is a normal query or a drafting request
+- **Responder path:** Generates cited answer from retrieved context
+- **Drafter path:** Produces first-draft legal document with placeholders and disclaimer
+- Records final answer/draft in workflow
+- Example: "Response generated with citations." / "Draft generated successfully."
 
 **Workflow Execution:**
 ```python
@@ -1977,7 +2028,7 @@ async def run_query(query: str, user_id: str) -> WorkflowState:
     """Run synchronously and return completed workflow."""
     1. Create workflow state (PENDING)
     2. Start MCP client subprocess
-    3. Run planner → retriever → responder sequentially
+    3. Run planner → retriever → responder/drafter sequentially
     4. Set status to COMPLETED or FAILED
     5. Stop MCP client
     6. Return workflow state with answer + steps
@@ -2005,7 +2056,7 @@ PENDING → RUNNING → COMPLETED
 - `completed_at`: Optional[str] - ISO timestamp
 
 **AgentStep Fields:**
-- `agent`: AgentRole enum (PLANNER, RETRIEVER, RESPONDER)
+- `agent`: AgentRole enum (PLANNER, RETRIEVER, RESPONDER, DRAFTER)
 - `message`: str - Human-readable step description
 - `timestamp`: str - ISO timestamp
 - `tool_calls`: List[Dict] - Tools called with arguments
@@ -2035,6 +2086,8 @@ async def askQuestion(
         "answer": result.get("answer", "No answer generated."),
         "steps": result.get("steps", []),
         "status": result.get("status", "failed"),
+      "web_searched": result.get("used_web_search", False),
+      "web_sources": result.get("web_sources", []),
     }
 ```
 
@@ -2080,7 +2133,7 @@ Output:
 Testing MCP Server initialization...
 ✓ MCP Server initialized successfully
 ✓ RAG Engine: Available
-✓ Tools available: ['search_docs', 'list_user_docs', 'get_doc_summary', 'answer_question']
+✓ Tools available: ['search_docs', 'list_user_docs', 'get_doc_summary', 'answer_question', 'search_web']
 ```
 
 ---
@@ -2094,8 +2147,8 @@ Testing MCP Server initialization...
 **No Documents:**
 - `list_user_docs` returns empty list
 - Planner notes no documents available
-- Retriever returns no results
-- Responder returns: "I couldn't find relevant information in your documents"
+- Retriever attempts web search fallback
+- Responder either answers from web results or returns no-context message
 
 **Tool Call Failures:**
 - Tool returns `{"success": false, "error": "..."}` 
@@ -2115,7 +2168,7 @@ Testing MCP Server initialization...
 **Latency Breakdown (typical query):**
 1. **Planner**: ~2-3 seconds (list_user_docs + LLM planning)
 2. **Retriever**: ~1-2 seconds (semantic search + source extraction)
-3. **Responder**: ~3-5 seconds (RAG answer generation)
+3. **Responder/Drafter**: ~3-7 seconds (answer or draft generation)
 4. **Total**: ~6-10 seconds for complete workflow
 
 **Optimization Opportunities:**
@@ -2146,7 +2199,7 @@ Testing MCP Server initialization...
 - `summarize_document` - Generate document summaries
 - `compare_documents` - Highlight differences between files
 - `extract_entities` - NER (Named Entity Recognition)
-- `web_search` - External knowledge retrieval
+- `cross_doc_conflict_scan` - Cross-document party conflict scanning
 
 **Custom Agent Chains:**
 - User-defined agent workflows

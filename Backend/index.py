@@ -30,8 +30,11 @@ class RAGEngine:
 
         loader = PyPDFLoader(self.pdfPath)
         docs = loader.load()
-        textSplitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000, chunk_overlap=100
+        from langchain_text_splitters import NLTKTextSplitter
+        
+        # Natural Language Context Chunking - Splits on sentences instead of arbitrary characters
+        textSplitter = NLTKTextSplitter(
+            chunk_size=600, chunk_overlap=50
         )
         splits = textSplitter.split_documents(docs)
         return Chroma.from_documents(

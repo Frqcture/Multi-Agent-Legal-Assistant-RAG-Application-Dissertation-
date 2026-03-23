@@ -120,8 +120,8 @@ async function askQuestion(question: string): Promise<Message | void> {
     }
 }
 
-// Function to handle the PDF upload
-async function uploadPDFs(files: FileList): Promise<{ message: string; status: string } | null> {
+// Function to handle file uploads
+async function uploadFiles(files: FileList): Promise<{ message: string; status: string } | null> {
 
     const url = `${BASE_URL}/upload`;
     const formData = new FormData();
@@ -309,7 +309,7 @@ const Search: React.FC = () => {
         };
         setMessages(prev => [...prev, systemMsg]);
 
-        const result = await uploadPDFs(files);
+        const result = await uploadFiles(files);
 
         if (result) {
             setMessages(prev => [...prev, {
@@ -456,7 +456,7 @@ const Search: React.FC = () => {
                         type="file" 
                         ref={fileInputRef} 
                         style={{ display: 'none' }} 
-                        accept=".pdf"
+                        accept=".pdf,.docx,.pptx,.txt,.png,.jpg,.jpeg,.tiff,.bmp"
                         multiple
                         onChange={handleFileChange}
                     />

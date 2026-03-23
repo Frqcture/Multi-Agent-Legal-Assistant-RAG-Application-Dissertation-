@@ -65,9 +65,17 @@ class MCPServer:
             except ValueError:
                 user_id_int = user_id
 
+            # Simple filter since we wiped the DB - avoid complex unsupported queries like $exists
+            search_filter = {
+                "$and": [
+                    {"user_id": user_id_int},
+                    {"chunk_level": "child"}
+                ]
+            }
+
             # Search with user filter, returning relevance scores
             results_with_scores = vectorstore.similarity_search_with_score(
-                query, k=top_k, filter={"user_id": user_id_int}
+                query, k=top_k, filter=search_filter
             )
 
             chunks = []
@@ -78,6 +86,7 @@ class MCPServer:
                         "source": doc.metadata.get("document_name", "Unknown"),
                         "page": doc.metadata.get("page_number", "?"),
                         "score": float(score),
+                        "parent_id": doc.metadata.get("parent_chunk_id", None)
                     }
                 )
 
