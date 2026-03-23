@@ -315,7 +315,7 @@ username=newuser&password=mypassword
 2. Validate authentication via `getCurrentUser`
 3. Create/get user-specific upload directory: `DocsToIngest/{user_id}/`
 4. For each uploaded file:
-   - Check filename ends with `.pdf`
+  - Check filename extension is in the supported allowlist (`.pdf`, `.docx`, `.pptx`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.tiff`, `.bmp`)
    - Verify PDF magic bytes (`%PDF-`) using `_looks_like_pdf()`
    - Check file size ≤ 15MB (streaming validation)
    - Sanitize filename using `os.path.basename()`

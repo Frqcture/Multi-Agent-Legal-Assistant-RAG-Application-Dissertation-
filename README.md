@@ -10,9 +10,10 @@ The system is purposely designed to securely ingest, vectorize, and search case 
 
 - **Multi-Agent RAG Orchestration**: Instead of standard linear RAG prompts, the backend splits reasoning into specialized `Planner`, `Retriever`, and `Responder` agents that self-coordinate solutions to complex queries.
 - **Model Context Protocol (MCP) Interoperability**: The vector search and retrieval functionalities operate securely via separate standard IO subprocesses mimicking industry-standard MCP capabilities.
-- **Proactive Insights Dashboard**: An automated, four-card panel that dynamically analyzes uploaded jurisprudence text to suggest `Next Actions`, `Related Statutes`, `Checklists`, and identify `Information Gaps`.
+- **Proactive Insights Dashboard**: An automated six-section panel that analyzes uploaded case material and surfaces `Next Actions`, `Related Statutes`, `Checklists`, `Information Gaps`, `Deadlines`, and `Conflicts`.
 - **Tenant-isolated Vector Datastores**: End-to-end data isolation matching document embeddings uniquely against authenticated user IDs (preventing contextual contamination inside ChromaDB).
 - **Robust Security Constructs**: Token generation with JWTs, dual-layered CSRF token validation, HTTP-Only strict cookies, API rate limiting via `slowapi`, and file structural safety evaluations.
+- **Privacy-aware Web Fallback**: If document retrieval is weak, the system can query DuckDuckGo using only the user query text (never uploaded document content), and the UI marks when this fallback was used.
 
 ---
 
@@ -24,6 +25,9 @@ The system is purposely designed to securely ingest, vectorize, and search case 
 > Note: For incredibly low-level breakdowns of module functionality, please view:
 > - [BACKEND_DOCUMENTATION.md](./BACKEND_DOCUMENTATION.md)
 > - [FRONTEND_DOCUMENTATION.md](./FRONTEND_DOCUMENTATION.md)
+> - [CONFIGURATION.md](./CONFIGURATION.md)
+> - [DEPLOYMENT.md](./DEPLOYMENT.md)
+> - [FAQ.md](./FAQ.md)
 
 ---
 
@@ -50,7 +54,7 @@ The system is purposely designed to securely ingest, vectorize, and search case 
    ```
 3. **Install dependencies** (assuming `requirements.txt` is present, or manually using pip based on imports):
    ```bash
-   pip install fastapi uvicorn sqlalchemy pydantic python-multipart python-jose[cryptography] passlib[bcrypt] pypdf slowapi langchain-chroma langchain-core langchain-text-splitters langchain-community langchain-ollama
+   pip install fastapi uvicorn sqlalchemy pydantic python-multipart python-jose[cryptography] passlib[bcrypt] pypdf slowapi langchain-chroma langchain-core langchain-text-splitters langchain-community langchain-ollama ddgs
    ```
 4. **Environment File**:
    Create a `.env` in the `Backend/` folder config (optional, it defaults safely):
@@ -92,10 +96,26 @@ The system is purposely designed to securely ingest, vectorize, and search case 
 ## 🛠 Usage Flow
 
 1. **Register & Log In**: Access the client interface. The secure JWT cookie bindings start immediately upon valid credentials.
-2. **Upload Documents**: Open the Library tab or use the 'Book' icon at the Chat footer to upload local documents (e.g., `.pdf`, `.docx`, `.pptx`, `.txt`, `.png`, `.jpg`).
+2. **Upload Documents**: Open the Library tab or use the 'Book' icon at the Chat footer to upload local documents (`.pdf`, `.docx`, `.pptx`, `.txt`, `.png`, `.jpg`, `.jpeg`, `.tiff`, `.bmp`). PDF uploads also receive magic-byte and structural safety checks before ingestion.
 3. **Wait for Vectorization**: LangChain reads, splits, and pipes your text chunks into ChromaDB's local filesystem structure.
 4. **Ask Complex Queries**: Ask substantive questions about the files. Ensure the "Steps Visible" icon in the navigation bar is enabled to observe how the *Planner* maps out the objective, the *Retriever* hits the MCP tool interface, and the *Responder* compiles your verified citation.
 5. **Review Proactive Tools**: See automated extraction alerts analyzing how tight your legal posture currently rests based on context logs. 
+
+---
+
+## 🌐 Web Search Fallback Behavior
+
+- The retriever first searches uploaded documents.
+- If the best document match is below relevance expectations, the workflow may call a web-search fallback.
+- The fallback sends only the user query text to DuckDuckGo. Uploaded document content is not transmitted.
+- The frontend explicitly indicates when web fallback was used in the response.
+
+---
+
+## 📌 Scope Notes (Current vs Deferred)
+
+- **Implemented now**: local-first RAG search and drafting, citation-oriented responses, and six-section proactive insights.
+- **Deferred (future work)**: simplified "explain like I'm five" legal summaries and collaborative multi-user case workspaces.
 
 ---
 

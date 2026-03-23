@@ -102,7 +102,12 @@ Each document contains precise, verifiable facts (dates, monetary figures, names
 
 ## Results
 
-*To be completed after test execution.*
+This section contains two result sets:
+
+1. **Baseline Results (Iteration 1)**: Initial implementation before context-aware chunking improvements.
+2. **Post-Implementation Results (Iteration 2)**: Results after the NLTK parent-child chunking refactor.
+
+For reproducibility, treat this file as the canonical summary table and pair it with date-stamped run outputs generated from `run_eval.py`.
 
 ### Per-Query Results
 
@@ -176,6 +181,8 @@ The reason I suspct these are as follows:
 ---
 
 ## Post-Implementation Results (After Context-Aware NLTK Chunking)
+
+**Status:** Current target behavior after the chunking refactor described in the write-up.
 
 After identifying the failures caused by large static chunk sizes spilling over page boundaries, the backend was refactored to use an `NLTKTextSplitter` with a Parent-Child hierarchical setup. 
 
