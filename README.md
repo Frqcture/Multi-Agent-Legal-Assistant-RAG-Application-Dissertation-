@@ -122,3 +122,7 @@ The system is purposely designed to securely ingest, vectorize, and search case 
 ## 🛡 License & Content Policy
 
 Adheres standardly to academic constraints / general open source protections. Always verify any legal output produced by the LLM (Large Language Model) against documented and cited page returns natively enclosed in the Application framework.
+
+This repository contains software developed as part of an academic dissertation. It is a research prototype and is not a substitute for professional legal advice. Outputs may be incomplete, inaccurate, or out of date and must be independently verified. The application should not be used with confidential, personal, or legally privileged information.
+
+All legal documents in `Backend/TestDocuments/` are fictional, synthetic test data created for this project. No real client documents or confidential case files are included.
