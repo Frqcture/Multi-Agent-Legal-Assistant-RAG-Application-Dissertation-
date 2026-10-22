@@ -1,0 +1,487 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{graphicx}
+\usepackage{booktabs} % For professional tables
+\usepackage{listings} % For code snippets if needed
+\usepackage{tabularx}
+\usepackage{url}
+\usepackage{float}
+\usepackage{dirtytalk}
+
+% --- Document Info ---
+\title{Project Report: Bulk Document Processing and Q\&A using Retrieval-Augmented Generation and Multi-Agent Workflows}
+\author{Joseph Moore \\ \small Candidate Number: 2412423}
+\date{March 27, 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+
+This project addresses the challenges faced by understaffed and underfunded small legal clinics nationwide. Many people who cannot afford a for-profit solicitor are left waiting months or years for free legal aid. The project aims to reduce staff workload, shorten wait times, and expand access to legal support by automating or streamlining time-consuming, routine tasks. \par
+
+Using a User-Centred Design approach, academic research and an interview with a legal volunteer identified key requirements: a low-cost solution, automated document drafting, and assisted research-tasks that are otherwise manual and slow.
+
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+% This covers "Background and motivation"
+\subsection{Problem Statement:}
+
+\begin{quote}
+\say{Small legal clinics across the country face a systemic crisis: a growing disparity between the high volume of low-income individuals requiring legal counsel and the severely limited human and financial resources available to assist them. Currently, understaffed and often voluntary teams are overwhelmed by administrative overhead and repetitive manual tasks, such as document drafting and preliminary case research. This bottleneck results in excessive wait times - often spanning months or years - effectively denying justice to those who cannot afford it. Without an immediate, low-cost technical intervention that automates routine legal workflows while preserving strict regulatory and data-handling standards, this access-to-justice gap will continue to widen.}
+
+\end{quote}
+
+\subsection{Motivation:}
+
+Motivation for this project stems from a desire to bridge the technology gap in the legal sector. The United Kingdom's legal aid system is currently facing a \say{pro-bono crisis}. While for-profit solicitors have access to expensive, high-end suites of technology, small-scale and voluntary legal clinics remain tethered by manual, paper-heavy workflows. These clinics are the last line of defence for low-income individuals, yet they are consistently underfunded and understaffed. \par
+
+Insights gained from both academic research and interviews—including one with a law graduate actively volunteering in a small clinic—highlighted the real-world impact of these challenges. The cost of this disparity is a \say{justice desert}, where vulnerable individuals wait months or years for initial consultations. It became clear that staff are often burdened with administrative tasks that could be automated. \par
+
+The objective of this project is to democratize access to high-end legal tools, by providing a solution that returns time to the experts, allowing them to focus on advocacy rather than administration.
+
+\subsection{Aims and Objectives:}
+
+\subsubsection{Aims:}
+The primary aim of this project is to design, implement, and evaluate a cost-effective digital assistant tailored to some of the specific workflows of small legal clinics. The focus of this project is on improving the speed of the \say{intake to draft} pipeline, transforming raw client interviews into structured, legal artifacts, while maintaining strict data privacy standards.
+
+\subsubsection{Objectives:}
+To achieve this aim, the following technical and research objectives were established:
+\begin{itemize}
+    \item \textbf{Requirements synthesis:} Conduct a semi-structured interview with a volunteer and perform targeted academic research to identify the most time-consuming bottlenecks and the technical constraints of the legal domain.
+    \item \textbf{Privacy-first architecture:} Design a system that handles sensitive client data appropriately, to ensure compliance with legal professional privilege.
+    \item \textbf{Core feature implementation:} \begin{itemize}
+        \item \textbf{Automated summarisation:} Develop a module to extract key legal facts from documents, either structured and official, or from a more unstructured style.
+        \item \textbf{Template-driven drafting:} Create an engine capable of generating formatted legal documents, based on the extracted facts.
+    \end{itemize}
+    \item \textbf{Performance evaluation:} Design and execute a controlled, query-based test suite (20 queries over 5 synthetic case files) to measure planner routing accuracy, top-5 retrieval success, and citation precision.
+\end{itemize}
+
+
+\section{Context and Related Work}
+\label{sec:context}
+
+\subsection{The Socio-Technical Landscape}
+
+The 2012 LASPO Act severely reduced civil legal aid in England and Wales, shifting the burden of unmet legal needs onto overstretched, volunteer-led pro-bono clinics \cite{laspo2012,moj_laspo_pir2019,laa2023}. This specific environment requires technological interventions to be deployable at near-zero marginal cost, while strictly maintaining client data privacy and producing rigorous, professionally formatted outputs.
+
+While legislative reform remains important, it is typically slow, politically contingent, and does not directly reduce the day-to-day administrative workload currently faced by clinics. The central bottleneck identified in both the interview and literature is operational capacity in the present: clinics need tools that can be deployed immediately to reduce drafting and research overhead, without waiting for broader policy cycles to materialise.
+
+\subsection{Academic Research: NLP in the Legal Domain}
+
+While early automated legal reasoning relied on brittle rule-based systems \cite{mccarty1977}, modern transformer architectures (such as BERT and GPT) have revolutionized the field \cite{vaswani2017, devlin2019, brown2020}, including highly capable models adapted specifically for legal domain tasks \cite{chalkidis2020,lexglue2021,guha2023}.\par
+However, autoregressive models are prone to hallucination - generating plausible but factually unsupported content \cite{maynez2020, ji2023}. In a legal context, this could mislead clients or expose practitioners to regulatory sanctions. To mitigate this, the proposed system utilizes Retrieval-Augmented Generation (RAG) \cite{lewis2020}. This anchors the generative model's outputs in dynamically retrieved, non-parametric knowledge from the user's specific documents, addressing common failure modes of long-context language models \cite{liu2023}.\par
+To handle complex legal queries (like drafting letters versus answering questions), the system moves beyond single-chain RAG and employs a multi-agent architecture \cite{wu2023}. By dividing the workload into specialised planner, retriever, and responder/drafter agents, the system isolates reasoning tasks and reduces semantic errors.
+
+\subsection{Competitive Analysis: Commercial vs. General Solutions}
+
+A number of commercial products have emerged in the legal AI market in recent years. Harvey,
+a GPT-4-class system trained on legal data and targeted at large law firms, has seen rapid
+uptake in BigLaw. Casetext's
+CoCounsel (since acquired by Thomson Reuters) and Lexis+~AI (LexisNexis) similarly offer
+retrieval-augmented legal research capabilities at a premium price point.
+These tools offer output quality attributable to both model scale and legal fine-tuning, but
+share a structural characteristic that renders them inaccessible to the target user base of
+this project: they are priced for commercial law firm revenue structures and perform inference
+on third-party cloud infrastructure. While cloud processing creates confidentiality and governance
+risk for all legal providers, large firms can often mitigate this through enterprise contracts,
+specialist compliance teams, and negotiated data-processing controls. Small pro-bono clinics
+typically lack the budget and procurement leverage for these safeguards, so the same cloud model
+imposes a disproportionate risk burden when handling sensitive legal-aid client data under the
+UK GDPR's data-minimisation and purpose-limitation
+obligations~\cite{ukgdpr_art5_2018,ico_purpose_limitation_2024,ico_data_minimisation_2024}.
+
+General-purpose assistants such as ChatGPT~(OpenAI) and Gemini~(Google) are broadly accessible
+and low or zero cost, but carry significant structural limitations for professional legal use:
+outputs are not grounded in user-specific documents, inline citation is absent by default (and
+unreliable when attempted), and unless enterprise data-processing agreements are in place,
+user queries may be used for model training or otherwise processed on external servers.
+
+\begin{table}[h]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Feature} & \textbf{Commercial (e.g., Harvey)} & \textbf{General (e.g., ChatGPT)} & \textbf{Proposed System} \\ \midrule
+Cost             & Prohibitive (\$100s/mo)            & Low / Free                       & \textbf{Near-Zero}       \\
+Data Privacy     & Enterprise-Grade (cloud)           & Variable / Risky                 & \textbf{Fully Local}     \\
+Document Grounding & User files (cloud-stored)        & None (parametric knowledge)      & \textbf{Local RAG}       \\
+Output Accuracy  & High (legal fine-tuned)            & Moderate (hallucinations)        & \textbf{Citation-Enforced} \\
+Reasoning Transparency & Opaque / proprietary       & None                             & \textbf{Full agent trace} \\ \bottomrule
+\end{tabular}%
+}
+\caption{Comparison of current legal assistance technologies.}
+\label{tab:comparison}
+\end{table}
+
+As shown in Table~\ref{tab:comparison}, the proposed system is positioned primarily on deployment locality, cost profile, and traceable reasoning rather than raw model scale.
+
+\noindent It is acknowledged that the proposed system's generative backbone-gemma3:4b, a 4-billion parameter open-weights model served locally via Ollama-cannot match the absolute output quality of GPT-4-class systems with legal fine-tuning. The system's
+competitive proposition is therefore not raw output quality but the combination of local
+deployment (all document content and inference remain on the practitioner's machine), near-zero operational cost,
+transparent and inspectable agent reasoning, and enforced citation that together are
+appropriate for the resource and compliance profile of pro-bono clinical settings.
+The one exception to local-only operation is the optional web-search fallback: when no
+sufficiently relevant document chunk is found, the user's query string is forwarded to
+DuckDuckGo to retrieve supplementary context.  No document content is transmitted;
+however, practitioners should be aware that the query text itself leaves the local
+environment in this case, and the fallback is surfaced clearly in the frontend alongside
+the generated answer.
+
+\subsection{Gap Analysis: The Need for Bespoke Pro-Bono Tech}
+
+The academic research, interview insights, and competitive analysis converge on a single structural tension, here
+termed the \textbf{efficiency--cost paradox}: tools with sufficient capability and accuracy
+for professional legal work are priced for commercial law firm revenues and process data on
+third-party infrastructure that is often difficult for resource-constrained clinics to reconcile
+with client confidentiality obligations in practice; conversely,
+tools that are free and privacy-preserving lack the document grounding, citation rigour, and
+structured output formatting required for their outputs to be used in professional legal
+practice without substantial post-generation review.
+
+This paradox is structural rather than a temporary market gap. Commercial providers have
+strong rational incentives to price for the high-margin segments of the legal market (large
+law firms and corporate legal departments), while open-source general-purpose assistants are
+not designed to satisfy the specific requirements of legal professional practice. Pro-bono
+organisations therefore occupy a gap that neither market forces nor existing open-source
+tooling are configured to address.
+
+A secondary gap is the \textbf{transparency deficit}. Existing commercial tools, even where
+affordable, function as black boxes: the provenance of an assertion cannot be inspected, the
+retrieval pathway is not exposed to the end user, and a confidently-stated response is not
+traceable to a specific page of a specific source document. In a regulated professional
+context, where advice must be defensible and attributable, this opacity is not merely
+inconvenient but potentially incompatible with the duty to the client and the court
+articulated in the SRA Code of Conduct~\cite{sra2023}.
+
+The proposed system is designed to close both gaps simultaneously: by running inference
+locally on open-weights models via Ollama, it eliminates the recurring cost and keeps all
+document content on-premises; by exposing the full planner-retriever-responder agent trace in
+the frontend interface with per-step tool-call visibility and enforcing inline citation at the
+model output level, it provides the transparency and attributability that professional legal
+practice requires.  The following section describes the design and implementation decisions
+through which these goals are operationalised.
+
+\section{Design and Implementation}
+\label{sec:implementation}
+
+\subsection{Development Methodology}
+
+To ensure the final system addressed the practical constraints of a real-world legal environment, a hybrid methodology was adopted, combining User-Centred Design (UCD), targeted academic literature review, and iterative, evaluation-driven software engineering. The development lifecycle was structured into four progressive phases:
+
+\begin{itemize}
+    \item \textbf{Phase 1 - Requirements elicitation (UCD + literature):} The project began with a semi-structured interview with a volunteer at a Liverpool-based legal clinic, specifically helping victims of the Windrush scandal that started in 2018, alongside a focused review of recent academic and legal-AI literature. Together, these research activities established the hard constraints that the system must operate entirely locally (to preserve legal professional privilege) and at near-zero recurring cost.
+    \item \textbf{Phase 2 - Baseline prototyping:} An initial prototype was developed focusing on core architectural viability. This involved connecting the local generative model to a foundational RAG pipeline using standard, rigid text chunking, alongside the multi-agent routing logic.
+    \item \textbf{Phase 3 - Evaluation-driven diagnostics:} Using a bespoke suite of 20 test queries across 5 synthetic legal scenarios, the baseline system's outputs were rigorously logged. This testing revealed critical failure states, most notably that rigid character chunking frequently merged facts across page boundaries, resulting in hallucinated citations.
+    \item \textbf{Phase 4 - Re-engineering and refinement:} Governed by the testing diagnostics, a secondary agile development sprint commenced. The ingestion pipeline was fundamentally refactored to use an NLP-driven, context-aware chunking model. This iterative feedback loop ensured continuous alignment between the technical engine and the practitioner's requirement for perfect citation accuracy.
+\end{itemize}
+
+\subsection{Architecture}
+
+The system follows a client--server architecture with a strict separation of concerns between a single-page application (SPA) frontend and a RESTful backend, further sub-divided internally
+by a subprocess-based multi-agent layer.
+
+\begin{itemize}
+    \item \textbf{Frontend (presentation layer):} A React~19 SPA served by Vite communicates
+          with the backend exclusively over HTTP, using cookie-bound sessions.  The application
+          has three routes (\texttt{/login}, \texttt{/register}, \texttt{/search}), of which
+          \texttt{/search} is protected client-side via a custom \texttt{useAuth} hook.  The hook
+          calls the \texttt{/me} endpoint on mount and exposes an \texttt{isAuthenticated} boolean;
+          unauthenticated users are redirected to \texttt{/login}, while \texttt{/login} and
+          \texttt{/register} remain publicly accessible.
+
+    \item \textbf{Backend REST layer:} A FastAPI application (served by Uvicorn) exposes authentication protected
+          endpoints for user management, file upload, document querying, and proactive insight
+          generation.  It owns a SQLite database (managed through SQLAlchemy) for user accounts and
+          a persistent ChromaDB vector store for document embeddings.
+
+    \item \textbf{Multi-agent sub-layer:} Queries are not handled by the REST layer directly.
+          Instead, the \texttt{AgentCoordinator} spawns a short-lived MCP server subprocess
+          for each incoming query and runs a three-stage pipeline ( \textit{planner}
+          $\rightarrow$ \textit{retriever} $\rightarrow$ \textit{responder} /\textit{drafter}) communicating with that subprocess via JSON-RPC~2.0 messages
+          over \texttt{stdio}.  The subprocess is started at the beginning of each workflow
+          and terminated in a \texttt{finally} block upon completion, regardless of success
+          or failure.  This per-query lifecycle keeps the vector store access strictly
+          isolated from the HTTP server process and mirrors the emerging industry-standard
+          model context protocol (MCP) for agent--tool interoperability, at the cost of a
+          subprocess cold-start on every request.
+\end{itemize}
+
+\subsection{Technology Stack}
+
+The frontend is built with \textbf{React~19, TypeScript, and Vite} for a robust, statically-typed user interface. The backend uses \textbf{Python and FastAPI} for asynchronous orchestration of agent workflows. \textbf{LangChain} abstracts the retrieval pipeline, while \textbf{Ollama} provides local, cost-free, privacy-preserving inference using \texttt{gemma3:4b} and the \texttt{embeddinggemma} model. \textbf{ChromaDB} serves as an in-process vector store, supporting per-user metadata filtering natively. \textbf{SQLite} with \textbf{SQLAlchemy} manages relational user data. Standard libraries like \textbf{passlib} and \textbf{python-jose} secure passwords and JWTs, while \textbf{slowapi} provides rate-limiting.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{SimpleStructure.jpg}
+    \caption{High Level Architectural Overview}
+    \label{fig:placeholder}
+\end{figure}
+
+\subsection{Key Implementation Details}
+
+\subsubsection{Multi-Agent Planner-Retriever-Responder Pipeline}
+
+The core intellectual contribution of the backend is the execution of queries through three
+specialised agents rather than a single monolithic RAG prompt.
+
+\begin{enumerate}
+    \item \textbf{Planner.}  Before any retrieval occurs, the planner invokes the LLM
+          (\texttt{temperature=0.0}, \texttt{num\_predict=128}) with a structured prompt to
+          classify the user's intent as either a query (question-answering) or a
+          drafting request (document generation).  The classification response is
+          parsed from the LLM output using a regular-expression JSON extraction, with a
+          15-second timeout that gracefully falls back to the query path on failure.  The
+          planner also calls the MCP \texttt{list\_user\_docs} tool to enumerate the
+          authenticated user's available documents and includes this information in its
+          planning message.
+
+    \item \textbf{Retriever.}  The retriever calls the MCP \texttt{search\_docs} tool,
+          which maps to a ChromaDB \texttt{similarity\_search\_with\_score} query filtered
+          by \texttt{user\_id}.  A \textbf{relevance threshold} of $1.5$ (Chroma's
+          L2/cosine distance) is applied: if the best-matching document chunk exceeds this
+          value, the documents are deemed insufficiently relevant and the agent invokes the
+          MCP \texttt{search\_web} tool, which forwards the query string to DuckDuckGo
+          and returns up to five result snippets.  No document content is transmitted in
+          this path.  A flag is set and surfaced to the frontend alongside the final answer
+          whenever web results are used.
+
+    \item \textbf{Responder / drafter.}  If the planner detected a drafting intent, the
+          higher-temperature drafter LLM (\texttt{temperature=0.3}, \texttt{num\_predict=2048})
+          synthesises a complete legal document from the retrieved context.  Otherwise, the
+          responder composes a cited answer in which every claim must be followed by a
+          bracketed source reference in the form \texttt{[document\_name, page\_number]},
+          enforced via system-prompt instructions.
+\end{enumerate}
+
+\subsubsection{Tenant-Isolated Vector Store}
+
+Every document chunk written to ChromaDB carries a \texttt{user\_id} integer in its
+metadata.  All retrieval queries include a metadata filter \texttt{\{"user\_id": user\_id\_int\}},
+ensuring that users can never retrieve embeddings from documents uploaded by other accounts.
+Upload directories on disk are similarly namespaced under \texttt{DocsToIngest/<user\_id>/},
+with a path-traversal guard that verifies the resolved path remains within the base upload
+directory before creating it.
+
+\subsubsection{Document Ingestion Pipeline}
+
+Uploaded files are processed by \texttt{ingest.py}, supporting multiple formats (PDF, DOCX, PPTX, TXT, images). PDF processing uses a three-tier fallback pipeline to handle varied document qualities:
+
+\begin{enumerate}
+    \item \textbf{Tier 1 - RapidOCR.}  \texttt{PyPDFLoader} attempts to extract text embedded in images using a \texttt{RapidOCRBlobParser} within a 30-second timeout.
+    \item \textbf{Tier 2 - Basic Extraction.}  If Tier 1 fails or yields under 100 characters, it falls back to the PDF's native text layer.
+    \item \textbf{Tier 3 - Image-based OCR.}  If native extraction fails, pages are rasterised at 300~DPI, preprocessed with OpenCV, and passed to Tesseract for OCR.
+\end{enumerate}
+
+\noindent Initially, extracted pages were split using a basic \texttt{RecursiveCharacterTextSplitter}. However, after testing revealed frequent cross-page hallucination issues natively stemming from rigid character boundaries (detailed in Section \ref{sec:evaluation}), the system was iteratively upgraded to use an \texttt{NLTKTextSplitter}. This respects sentence boundaries via a hierarchical parent-child chunking model, after which chunks are embedded and written to ChromaDB with metadata.
+
+\subsubsection{Security Architecture}
+
+Authentication uses a layered defence-in-depth approach.  On login, the server issues a
+short-lived JWT (signed with HS256) stored in an \texttt{HttpOnly} \texttt{Secure} cookie,
+preventing JavaScript access and mitigating XSS token theft.  A second non-\texttt{HttpOnly}
+CSRF cookie is simultaneously issued; all state-mutating requests must present its value in
+the \texttt{X-CSRF-Token} header, implementing the double-submit cookie pattern.  Passwords
+are stored exclusively as bcrypt hashes.  Per-IP rate limiting via \texttt{slowapi} applies
+to authentication endpoints.  Uploaded files are validated against an allowed extension list. Beyond this, PDFs
+specifically pass through two validation layers before ingestion: first, a magic-byte check
+reads the opening five bytes of the file and rejects anything that does not begin with
+\texttt{\%PDF-}; second, \texttt{pypdf}'s \texttt{PdfReader} performs
+a structural parse to reject encrypted or otherwise malformed files.
+
+\subsubsection{Proactive Insights Dashboard}
+
+Beyond reactive Q\&A, the frontend renders a proactive dashboard that requests a
+dedicated backend endpoint on initial load, on meaningful query changes, and on manual refresh.
+The backend generates six categories of unsolicited intelligence- Next Actions,
+Related Statutes, a Compliance Checklist, Information Gaps,
+Deadlines, and inter-document Conflicts - then ranks them by section relevance,
+with the frontend rendering the top four sections at a time.  Next Actions}supports timely and proportionate progression of
+matters in line with the overriding objective and judicial case-management expectations
+\cite{cpr1_2025,cpr3_2025}.  Related Statutes is aligned with the solicitor's duty
+to apply current legal knowledge competently \cite{sra_competence_2023,sra2023}.  The
+Compliance Checklist mirrors pre-action procedural expectations on information exchange and
+early resolution \cite{cpr_papd_2025}, while Information Gaps reflects the practical
+need to identify and request missing particulars under civil procedure \cite{cpr18_2025}.
+Deadlines operationalises statutory limitation periods and procedural time-control
+risks \cite{limitation1980,cpr3_2025}, and Conflicts supports explicit professional
+obligations to identify and manage conflicts of interest \cite{sra2023}.  Each insight
+carries a severity rating (\texttt{high}/\texttt{medium}/\texttt{low}) and a
+\texttt{shown\_because} explanation, giving the user full provenance for every automated
+suggestion.
+
+\section{Evaluation}
+\label{sec:evaluation}
+% This covers "Critical appraisal"
+
+\subsection{Testing Methodology}
+
+To rigorously evaluate whether the proposed system meets the safety and accuracy requirements of the legal domain, testing focused on the reliability of the multi-agent RAG pipeline. A proprietary evaluation dataset was constructed, composed of 5 synthetic, anonymised client case files, and 20 corresponding test queries. These queries were split evenly between fact-retrieval questions and document drafting requests.
+
+The system was evaluated across three primary metrics corresponding to the agent pipeline:
+\begin{enumerate}
+\item \textbf{Planner accuracy:} The percentage of test queries correctly routed to either the responder or drafter agent.
+\item \textbf{Retrieval success rate (top-5):} The percentage of queries where the critical supporting document chunk was successfully retrieved within the top 5 results by the ChromaDB retriever.
+\item \textbf{Citation precision:} A manual review of the generated outputs to determine the percentage of inline citations [document\_name, page\_number] that accurately pointed to the correct source text without hallucination.
+\end{enumerate}
+
+The queries below are representative examples used to test the system. Table~\ref{tab:fact-queries} summarises representative fact-retrieval prompts, while Table~\ref{tab:drafting-queries} summarises representative drafting prompts. For the full query set, detailed test procedure, and statistical calculations, see \texttt{EVALUATION\_TEST\_PLAN.md}:
+
+\begin{table}[H]
+    \centering
+    \begin{tabularx}{\textwidth}{|l|X|X|l|X|}
+    \hline
+        ID & Query & Target document & Page(s) & Ground-truth answer \\ \hline
+        Q1 & \say{What was the total contract price in the Thompson v Meridian Construction case?} & \path{Thompson_v_Meridian_Construction.pdf} & 1 & GBP 187,500 \\ \hline
+        Q4 & \say{What is the UK patent number at issue in the DataFlow v NexGen dispute?} & \path{DataFlow_v_NexGen_IP_Dispute.pdf} & 1 & GB2587412B, granted 22 September 2021 \\ \hline
+        Q7 & \say{How long was Sarah Williams employed before her dismissal?} & \path{Williams_v_Ashford_Logistics_Employment.pdf} & 1 & 6 years and 3 months (2 September 2018 – 17 December 2024) \\ \hline
+    \end{tabularx}
+
+    \caption{Fact Retrieval Queries}
+    \label{tab:fact-queries}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \begin{tabularx}{\textwidth}{|l|X|X|}
+    \hline
+        ID & Query & Target document context \\ \hline
+        Q11 & \say{Draft a letter before action for the Thompson v Meridian construction dispute} & \path{Thompson_v_Meridian_Construction.pdf} \\ \hline
+        Q14 & \say{Draft a cease and desist letter for the DataFlow v NexGen IP dispute} & \path{DataFlow_v_NexGen_IP_Dispute.pdf} \\ \hline
+        Q17 & \say{Draft the grounds of complaint for Sarah Williams' unfair dismissal ET1 form} & \path{Williams_v_Ashford_Logistics_Employment.pdf} \\ \hline
+    \end{tabularx}
+
+    \caption{Document Drafting Queries}
+    \label{tab:drafting-queries}
+\end{table}
+
+\subsection{Baseline Results}
+
+The system showed a strong baseline accuracy for local deployment. While there are identifiable areas for improvement, these results validate the system's utility within a pro-bono clinic.
+
+\begin{itemize}
+
+\item \textbf{Intent routing:} The zero-shot planner agent (running gemma3:4b at temperature = 0.0) achieved a \textbf{100\%} accuracy score.
+
+\item \textbf{Retrieval effectiveness:} The embeddinggemma model combined with ChromaDB's similarity search achieved a top-5 retrieval success rate of \textbf{85\%}
+
+\item \textbf{Hallucination mitigation:} Enforcing inline citations proved highly effective. Of the 15 citations generated during testing, \textbf{70\%} accurately pointed to the correct source text without hallucination. 
+
+\end{itemize}
+
+\begin{table}[!ht]
+    \centering
+    \begin{tabular}{|l|l|l|}
+    \hline
+        Metric & Fact retrieval (Q1–Q10) & Drafting (Q11–Q20) \\ \hline
+        Planner accuracy & 10/10 (100\%) & 10/10 (100\%) \\ \hline
+        Retrieval success rate & 7/10 (70\%) & 10/10 (100\%) \\ \hline
+        Citation precision & 7/10 (70\%) & N/A \\ \hline
+    \end{tabular}
+    \caption{Aggregate Baseline Results (Iteration 1)}
+    \label{tab:baseline-aggregate}
+\end{table}
+
+As summarised in Table~\ref{tab:baseline-aggregate}, baseline performance was strongest for routing and drafting retrieval, with fact-retrieval citation precision remaining the primary weakness. Table~\ref{tab:baseline-fact-results} and Table~\ref{tab:baseline-drafting-results} demonstrate how per-query outcomes were recorded; the full set is detailed in \texttt{EVALUATION\_TEST\_PLAN.md}:
+
+    \begin{table}[H]
+    \centering
+    \begin{tabularx}{\textwidth}{|l|l|X|X|X|X|X|X|X|}
+    \hline
+      ID & Planner & Correct Route? & Top-5? & Retrie\-val Rank & Cita\-tions? & Valid? & Hal\-lu\-ci\-na\-tion? & Notes \\ \hline
+        Q1 & Fact retrieval & Yes & Yes & 1 & Yes & Yes & No & Missed some key information \\ \hline
+        Q4 & Fact retrieval & Yes & Yes & 1 & Yes & Yes & No & Perfect answer \\ \hline
+        Q7 & Fact retrieval & Yes & Yes & 1 & Yes & Yes & No & Perfect answer \\ \hline
+    \end{tabularx}
+
+    \caption{Fact Retrieval Results}
+    \label{tab:baseline-fact-results}
+    \end{table}
+
+    \begin{table}[H]
+    \centering
+    \begin{tabularx}{\textwidth}{|l|l|X|X|X|X|X|}
+    \hline
+        ID & Planner & Correct Route? & Top-5? & Retrie\-val Rank & Hal\-lu\-ci\-na\-tion? & Notes \\ \hline
+        Q11 & Document drafter & Yes & Yes & 1 & No & Perfect answer \\ \hline
+        Q14 & Document drafter & Yes & Yes & 1 & No & Refused to draft letter, citing a lack of information to use \\ \hline
+        Q17 & Document drafter & Yes & Yes & 1 & No & Perfect answer \\ \hline
+    \end{tabularx}
+
+    \caption{Document Drafting Results}
+    \label{tab:baseline-drafting-results}
+\end{table}
+
+Note that some headings in Table~\ref{tab:baseline-fact-results} and Table~\ref{tab:baseline-drafting-results} were abbreviated to accommodate page-width constraints.
+
+\subsection{System Refinement and Iteration 2 Results}
+
+During the baseline evaluation phase, testing revealed significant issues related to the initial document chunking strategy. The baseline implementation used a \texttt{RecursiveCharacterTextSplitter} with a fixed \texttt{chunk\_size=1000}. However, test results indicated that this large, arbitrary character limit frequently caused overlapping information to be systematically mislabeled, artificially capping the citation precision metric at 70\%. Because the chunks indiscriminately straddled page boundaries, facts visually present on a second page were often merged with prior text, causing the backend to falsely ground the fact to \say{Page 1.}
+
+Upon observing these failure cases, the ingestion pipeline was fundamentally re-engineered to implement a dynamic, context-aware chunking strategy using the Natural Language Toolkit (\texttt{NLTKTextSplitter}). Rather than relying on rigid character limits, this updated approach parses grammatical structures to split text strictly at logical sentence terminations. Furthermore, a hierarchical ``parent-child'' chunking model was introduced: the text is first grouped into larger thematic blocks for contextual continuity, then recursively broken into granular child blocks (max 600 characters) specifically tuned for precise dense vector retrieval. This NLP-driven revision successfully eliminated the page-spillover effect. By terminating chunks exclusively on sentence boundaries, even across messy Tesseract OCR payloads, the system restored high-precision referencing and ensured the agent consistently cited the exact source page.
+
+To verify the impact of this improvement, a second iteration of testing was conducted using the identical query set. The results demonstrated a complete resolution of the page-spillover and missed-context issues, validating the dynamic NLP chunking strategy:
+
+\begin{itemize}
+\item \textbf{Intent routing:} The planner agent maintained its \textbf{100\%} accuracy score.
+\item \textbf{Retrieval effectiveness:} The top-5 retrieval success rate improved to \textbf{100\%}, seamlessly matching the correct context in all cases.
+\item \textbf{Citation precision:} By correctly isolating sentence structures and halting chunk overflow, citation precision jumped to \textbf{100\%}.
+\end{itemize}
+
+\begin{table}[!ht]
+    \centering
+    \begin{tabular}{|l|l|l|}
+    \hline
+        Metric & Fact retrieval (Q1–Q10) & Drafting (Q11–Q20) \\ \hline
+        Planner accuracy & 10/10 (100\%) & 10/10 (100\%) \\ \hline
+        Retrieval success rate & 10/10 (100\%) & 10/10 (100\%) \\ \hline
+        Citation precision & 10/10 (100\%) & N/A \\ \hline
+    \end{tabular}
+    \caption{Aggregate Results Post-Improvement (Iteration 2)}
+    \label{tab:iter2-aggregate}
+\end{table}
+
+As shown in Table~\ref{tab:iter2-aggregate}, the second iteration achieved full scores across the reported aggregate metrics. The post-improvement sample results are shown in Table~\ref{tab:iter2-sample-fact-results}:
+
+\begin{table}[H]
+    \centering
+    \begin{tabularx}{\textwidth}{|l|l|X|X|X|X|X|X|X|}
+    \hline
+      ID & Planner & Correct Route? & Top-5? & Retrie\-val Rank & Cita\-tions? & Valid? & Hal\-lu\-ci\-na\-tion? & Notes \\ \hline
+        Q2 & Fact retrieval & Yes & Yes & 1 & Yes & Yes & No & Accurately captured precise dates \\ \hline
+        Q8 & Fact retrieval & Yes & Yes & 1 & Yes & Yes & No & Net value precisely extracted \\ \hline
+    \end{tabularx}
+    \caption{Sample Fact Retrieval Results (Iteration 2)}
+    \label{tab:iter2-sample-fact-results}
+\end{table}
+
+\subsection{Critical Appraisal}
+
+While the refined system successfully demonstrates a high-accuracy, privacy-preserving alternative to commercial legal AI, the evaluation highlighted specific limitations inherent to local deployment.
+
+The primary bottleneck observed was initially believed to be the generative capacity of the 4-billion parameter model (gemma3:4b), which appeared to occasionally struggle with \say{lost-in-the-middle} phenomena when retrieving maximum context windows for more complex fact-retrieval tasks. While fixing the document chunking directly mitigated the 40\% failure rate related to secondary retrieved facts, running advanced inference locally remains restrictive for broader queries requiring synthesis across multiple unrelated documents.
+
+Despite these limitations, the prototype successfully bridges the efficiency--cost paradox. By prioritizing enforced citations and agent transparency over raw generative flair, the system ensures that any model errors are immediately visible and verifiable by the legal practitioner. Future work could improve retrieval accuracy by implementing a hybrid search (combining dense vector embeddings with BM25 keyword search) to capture highly specific legal terminology that dense embeddings might miss.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+This project set out to address the systemic \say{pro-bono crisis} facing small legal clinics, where overstretched volunteers are burdened by repetitive administrative tasks. By identifying the \say{efficiency--cost paradox,} the research highlighted the need for a solution that avoids the prohibitive costs and data-privacy risks associated with commercial cloud-based AI tools. The resulting prototype demonstrates a privacy-first, multi-agent digital assistant that operates at near-zero marginal cost by running entirely locally on the practitioner's machine. The implementation of a three-stage multi-agent pipeline (planner, retriever, responder/drafter) using Retrieval-Augmented Generation (RAG) proved highly effective. Evaluation results showed 100\% accuracy in intent routing by the planner agent and 100\% retrieval success for document drafting tasks. Furthermore, enforcing inline citations provided a strong baseline for mitigating hallucinations, ensuring model errors remain visible and preserving the transparency required for professional legal practice.
+
+However, testing also revealed limitations inherent to local deployment and the current system architecture. The 4-billion parameter model (gemma3:4b) occasionally struggled with \say{lost-in-the-middle} phenomena, failing to incorporate secondary retrieved facts in complex fact-retrieval tests. Additionally, while the initial use of a fixed character chunk size caused overlapping information to be mislabeled across page boundaries, recognising this limitation and implementing an NLP-based, context-aware sentence chunker demonstrated that dynamic hierarchical pipelines can restore exact page-citation accuracy, even against structurally unpredictable OCR documents. Future development should address these bottlenecks by upgrading the retrieval mechanism to a hybrid search that combines dense vector embeddings with BM25 keyword search. This would better capture highly specific legal terminology that dense embeddings occasionally miss. Ultimately, this project validates the utility of bespoke, locally hosted AI in democratising access to legal technology, providing a strong foundation for reducing the administrative burden on pro-bono clinics.
+
+% --- References ---
+\bibliographystyle{unsrt}
+\bibliography{refs} % Your .bib file
+
+\end{document}

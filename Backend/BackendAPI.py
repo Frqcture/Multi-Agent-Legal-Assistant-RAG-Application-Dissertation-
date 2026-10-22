@@ -448,16 +448,16 @@ async def deleteFile(
 # Proactive Insights Engine (Dashboard)
 # ============================================================================
 
-import json as _json  # noqa: E402
-import time as _time  # noqa: E402
+import json as _json
+import time as _time  
 
 # Shared LLM instance for proactive analysis
 _insights_llm = ChatOllama(model="gemma3:4b", temperature=0.2, num_predict=2048)
 
 # Simple TTL cache: { user_id: { "ts": float, "data": dict } }
 _insights_cache: dict = {}
-_CACHE_TTL = 3600  # seconds – serve cached result for 1 hour
-# _CACHE_TTL = 120
+_CACHE_TTL = 7200  # seconds – serve cached result for 1 hour
+#_CACHE_TTL = 120
 
 
 def _extract_document_context(rag: RAGEngine, user_id, sample_limit: int = 6) -> str:
